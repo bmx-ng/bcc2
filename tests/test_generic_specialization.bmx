@@ -2240,6 +2240,33 @@ Local ordinaryGenericMemberRuntimeC:String = TBlitzMaxCompiler.EmitRuntimeC(ordi
 Local ordinaryGenericMemberAbiName:String = ordinaryGenericMemberConsumerCompilation.genericPlan.registry.nodes[0].readableAbiName
 Check(ordinaryGenericMemberRuntimeDiagnostics.length = 0 And ordinaryGenericMemberRuntimeC.Contains("struct " + ordinaryGenericMemberAbiName + "_obj *"), "ordinary imported member declarations and calls use the canonical specialization C ABI")
 
+Local nominalGenericSignatureModuleSource:String = "SuperStrict~nModule Collections.SignatureBox~nType TSignatureBox<T>~nField value:T~nMethod Get:T()~nReturn value~nEnd Method~nEnd Type"
+Local nominalGenericSignatureModuleCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/collections.mod/signaturebox.mod/signaturebox.bmx", nominalGenericSignatureModuleSource, Null, compilerOptions)
+Local nominalGenericSignatureArtifactDiagnostics:TCompilerDiagnostic[]
+Local nominalGenericSignatureOutputs:TCompilerGenericTemplateOutput[] = TBlitzMaxCompiler.EmitGenericTemplateArtifacts(nominalGenericSignatureModuleCompilation, nominalGenericSignatureArtifactDiagnostics)
+Local nominalGenericSignatureInterfaceDiagnostics:TCompilerDiagnostic[]
+Local nominalGenericSignatureInterface:String = TBlitzMaxCompiler.EmitInterface(nominalGenericSignatureModuleCompilation, nominalGenericSignatureInterfaceDiagnostics)
+Local nominalGenericSignatureResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
+nominalGenericSignatureResolver.AddInterface("collections.signaturebox", "sdk/collections.signaturebox.i", nominalGenericSignatureInterface)
+For Local nominalGenericSignatureOutput:TCompilerGenericTemplateOutput = EachIn nominalGenericSignatureOutputs
+	nominalGenericSignatureResolver.AddGenericTemplate(nominalGenericSignatureOutput.artifactReference, "sdk/" + nominalGenericSignatureOutput.artifactReference, nominalGenericSignatureOutput.content)
+Next
+Local nominalGenericSignatureSourceOptions:TCompilerOptions = TCompilerOptions.CreateDefault()
+nominalGenericSignatureSourceOptions.requireCoreInterface = False
+nominalGenericSignatureSourceOptions.targetPlatform = "test"
+nominalGenericSignatureSourceOptions.targetArchitecture = "x64"
+nominalGenericSignatureSourceOptions.conditionalSymbols = ["bmxng", "ptr64"]
+nominalGenericSignatureSourceOptions.sourceModuleName = "net.nominalgenericsignatures"
+Local nominalGenericSignatureSource:String = "SuperStrict~nImport Collections.SignatureBox~nType TSignatureItem~nField value:Int~nEnd Type~nType TSignatureOwner~nMethod Ping:Int()~nReturn 42~nEnd Method~nMethod Items:TSignatureBox<TSignatureItem>()~nReturn Null~nEnd Method~nMethod Replace(value:TSignatureBox<TSignatureItem>)~nEnd Method~nEnd Type"
+Local nominalGenericSignatureSourceCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/net.mod/nominalgenericsignatures.mod/signature_owner.bmx", nominalGenericSignatureSource, nominalGenericSignatureResolver, nominalGenericSignatureSourceOptions)
+Local nominalGenericSignatureSourceInterfaceDiagnostics:TCompilerDiagnostic[]
+Local nominalGenericSignatureSourceInterface:String = TBlitzMaxCompiler.EmitInterface(nominalGenericSignatureSourceCompilation, nominalGenericSignatureSourceInterfaceDiagnostics)
+nominalGenericSignatureResolver.AddInterface("signature_owner.bmx", "sdk/mod/net.mod/nominalgenericsignatures.mod/.bmx/signature_owner.bmx.release.test.x64.i", nominalGenericSignatureSourceInterface)
+nominalGenericSignatureResolver.AddInterface("net.nominalgenericsignatures", "sdk/net.nominalgenericsignatures.i", "SuperStrict~nImport ~qsignature_owner.bmx~q")
+Local nominalGenericSignatureConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("nominal-generic-signature-consumer.bmx", "SuperStrict~nImport Net.NominalGenericSignatures~nLocal owner:TSignatureOwner = New TSignatureOwner~nLocal result:Int = owner.Ping()", nominalGenericSignatureResolver, compilerOptions)
+Check(nominalGenericSignatureModuleCompilation.Succeeded() And nominalGenericSignatureSourceCompilation.Succeeded() And nominalGenericSignatureArtifactDiagnostics.length = 0 And nominalGenericSignatureInterfaceDiagnostics.length = 0 And nominalGenericSignatureSourceInterfaceDiagnostics.length = 0 And nominalGenericSignatureConsumer.Succeeded(), "an imported ordinary Type accepts closed generic method signatures whose argument belongs to a secondary source of the owning module, even when the consumer does not call those methods: template " + CompilationSummary(nominalGenericSignatureModuleCompilation) + "; owner " + CompilationSummary(nominalGenericSignatureSourceCompilation) + "; consumer " + CompilationSummary(nominalGenericSignatureConsumer))
+Check(nominalGenericSignatureConsumer.genericPlan.registry.nodes.length = 1 And nominalGenericSignatureConsumer.genericPlan.registry.nodes[0].key.typeArguments[0].CanonicalName() = "net.nominalgenericsignatures::tsignatureitem", "a hidden source-interface scope does not create a second physical-file generic identity alongside its owning logical module")
+
 Local ordinaryClosedBaseModuleSource:String = "SuperStrict~nModule Collections.OrdinaryClosedBase~nType TClosedBase<T>~nField value:T~nMethod Read:T()~nReturn value~nEnd Method~nMethod Marker:Int()~nReturn 1~nEnd Method~nEnd Type~nType TStringDerived Extends TClosedBase<String>~nField extra:String~nMethod Marker:Int() Override~nReturn 2~nEnd Method~nMethod ExtraValue:String()~nReturn extra~nEnd Method~nEnd Type"
 Local ordinaryClosedBaseModuleCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/collections.mod/ordinaryclosedbase.mod/ordinaryclosedbase.bmx", ordinaryClosedBaseModuleSource, Null, compilerOptions)
 Local ordinaryClosedBaseArtifactDiagnostics:TCompilerDiagnostic[]
