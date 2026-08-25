@@ -1,0 +1,12 @@
+.DS_Store
+.bmx/
+.generics/
+
+# Locally built test applications
+/tests/test_*
+!/tests/test_*.bmx
+/tests/lsp/test_lsp_server
+
+# Locally built applications
+/compiler/bcc
+/lsp/bls

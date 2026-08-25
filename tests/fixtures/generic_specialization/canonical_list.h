@@ -1,0 +1,21 @@
+#ifndef BCC2_CANONICAL_LIST_H
+#define BCC2_CANONICAL_LIST_H
+
+#include <brl.mod/blitz.mod/blitz.h>
+
+struct bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_obj;
+
+struct bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_obj *
+bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_Create(BBSTRING value);
+
+BBSTRING
+bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_First(
+    struct bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_obj *self);
+
+extern struct bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_obj *list1;
+extern struct bmx_gen_Collections_Core_TArrayList_string_f4809e2216dc6ea913a2ff7649253794_obj *list2;
+
+void initialize_file1(BBSTRING value);
+void initialize_file2(BBSTRING value);
+
+#endif
