@@ -454,11 +454,11 @@ SaveText("Object^Null{~n}=~qbbObjectClass~q", catalogueCoreDirectory + "/blitz_c
 SaveText("SuperStrict~nInterface IFirst~nMethod Run:Int(value:Int)~nEnd Interface", catalogueAlphaDirectory + "/first.bmx")
 SaveText("SuperStrict~nType TThird~nEnd Type", catalogueAlphaThirdDirectory + "/third.bmx")
 SaveText("SuperStrict~nType TDeep~nEnd Type", catalogueAlphaNestedDirectory + "/deep.bmx")
-SaveText("SuperStrict~nImport alpha.first~nType TSecond Implements IFirst~nMethod Run:Int(amount:Int)~nReturn amount~nEnd Method~nEnd Type", catalogueBetaDirectory + "/second.bmx")
+SaveText("SuperStrict~nImport alpha.first~nType TSecond Implements IFirst~nMethod Run:Int(amount:Int)~nReturn amount~nEnd Method~nEnd Type~nRem~nbbdoc: Returns the kind of a file.~nEnd Rem~nFunction FileType:Int(path:String)~nReturn 1~nEnd Function~nFunction FileType:Int(path:String, followLinks:Int)~nReturn 1~nEnd Function", catalogueBetaDirectory + "/second.bmx")
 SaveText("IFirst^Null{ '@source ~qfirst.bmx~q,2,0~n-Run:Int(value:Int) '@source ~qfirst.bmx~q,3,0~n}AI=~qalpha_first_IFirst~q", catalogueAlphaDirectory + "/first." + catalogueMung + ".i")
 SaveText("TThird^Object{ '@source ~qthird.bmx~q,2,0~n}F=~qalpha_third_TThird~q", catalogueAlphaThirdDirectory + "/third." + catalogueMung + ".i")
 SaveText("TDeep^Object{ '@source ~qdeep.bmx~q,2,0~n}F=~qalpha_first_deep_TDeep~q", catalogueAlphaNestedDirectory + "/deep." + catalogueMung + ".i")
-SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
+SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nFileType:Int(path:String)=~qbeta_second_FileType~q '@source ~qsecond.bmx~q,11,0~nFileType:Int(path:String,followLinks:Int)=~qbeta_second_FileType2~q '@source ~qsecond.bmx~q,14,0", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
 Local catalogueDependencies:TLspDependencyCache = New TLspDependencyCache
 Local installedCatalogue:TLspInstalledModuleCatalogue = New TLspInstalledModuleCatalogue
 Check(installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies), "installed catalogue performs its initial discovery")
@@ -466,6 +466,7 @@ Check(installedCatalogue.ModuleCount() = 5 And installedCatalogue.catalogue.Find
 Check(installedCatalogue.catalogue.SymbolsQualified("alpha.first.IFirst.Run").length = 1, "installed catalogue indexes module members")
 Check(installedCatalogue.catalogue.SymbolsQualified("beta.second.TSecond")[0].originPath = catalogueBetaDirectory + "/second.bmx", "installed catalogue retains source provenance")
 Check(installedCatalogue.catalogue.SymbolsQualified("alpha.first.deep.TDeep")[0].originPath = catalogueAlphaNestedDirectory + "/deep.bmx", "nested installed modules retain original source provenance")
+Check(installedCatalogue.catalogue.ExportedTopLevelSymbolsWithPrefix("FileT").length = 2 And installedCatalogue.catalogue.ExportedTopLevelSymbolsWithPrefix("Run").length = 0, "installed completion index returns public top-level prefix matches without type members")
 Local importNameCatalogueStore:TLspInstalledModuleCatalogueStore = New TLspInstalledModuleCatalogueStore
 Local importNameContext:TLspWorkspaceContext = TLspWorkspaceContext.Create("file:///catalogue-import", "catalogue import", catalogueConfiguration.Copy(), catalogueDependencies, Null, importNameCatalogueStore)
 Local importNameDocument:TLspDocument = New TLspDocument
@@ -496,6 +497,53 @@ catalogueImplementationDocument.uri = "file:///catalogue-implementation/main.bmx
 catalogueImplementationDocument.path = "/catalogue-implementation/main.bmx"
 catalogueImplementationDocument.text = "SuperStrict~nImport alpha.first~nLocal worker:IFirst~nworker.Run(1)"
 catalogueImplementationContext.Analyze(catalogueImplementationDocument)
+Local autoImportDocument:TLspDocument = New TLspDocument
+autoImportDocument.uri = "file:///catalogue-implementation/auto-import.bmx"
+autoImportDocument.path = "/catalogue-implementation/auto-import.bmx"
+autoImportDocument.text = "SuperStrict~nLocal kind:Int = FileT"
+Local autoImportItems:TJSONArray = TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 1, 27, True))
+Local autoImportItem:TJSONObject = FindCompletionItemWithLabelDetail(autoImportItems, "FileType", "(path:String)")
+Check(autoImportItem <> Null, "auto-import completion finds FileType from beta.second")
+Local autoImportEdits:TJSONArray = TJSONArray(autoImportItem.Get("additionalTextEdits"))
+Local autoImportEdit:TJSONObject = TJSONObject(autoImportEdits.Get(0))
+Local autoImportStart:TJSONObject = TJSONObject(TJSONObject(autoImportEdit.Get("range")).Get("start"))
+Check(CompletionItemCount(autoImportItems, "FileType") = 2, "auto-import completion preserves installed Function overloads")
+Check(autoImportItem.GetString("insertText") = "FileType(${1:path})$0" And autoImportItem.GetInteger("insertTextFormat") = 2, "auto-import completion retains call snippets")
+Check(TJSONObject(autoImportItem.Get("labelDetails")).GetString("description") = "beta.second" And autoImportItem.GetString("detail").Contains("auto import from beta.second"), "auto-import completion identifies its installed module")
+Check(autoImportEdits.Size() = 1 And autoImportEdit.GetString("newText") = "~n~nImport beta.second" And autoImportStart.GetInteger("line") = 0 And autoImportStart.GetInteger("character") = 11, "auto-import completion inserts a module after SuperStrict")
+Local resolvedAutoImport:TJSONObject = TBlitzMaxLspCompletion.Resolve(autoImportItem, autoImportDocument, catalogueImplementationContext)
+Check(TJSONObject(resolvedAutoImport.Get("documentation")).GetString("value").Contains("Returns the kind of a file.") And TJSONObject(resolvedAutoImport.Get("documentation")).GetString("value").Contains("Auto import from `beta.second`"), "auto-import completion resolve retains installed declaration identity and documentation")
+autoImportDocument.text = "SuperStrict~nImport alpha.first~nLocal kind:Int = FileT"
+catalogueImplementationContext.Forget(autoImportDocument.uri)
+autoImportItems = TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 2, 27))
+autoImportItem = FindCompletionItem(autoImportItems, "FileType")
+autoImportEdit = TJSONObject(TJSONArray(autoImportItem.Get("additionalTextEdits")).Get(0))
+autoImportStart = TJSONObject(TJSONObject(autoImportEdit.Get("range")).Get("start"))
+Check(autoImportEdit.GetString("newText") = "~nImport beta.second" And autoImportStart.GetInteger("line") = 1, "auto-import completion extends an existing top-level import group")
+autoImportDocument.text = "SuperStrict~nLocal worker:TSec"
+catalogueImplementationContext.Forget(autoImportDocument.uri)
+Local autoImportTypeItem:TJSONObject = FindCompletionItem(TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 1, 19)), "TSecond")
+Check(autoImportTypeItem <> Null And autoImportTypeItem.GetInteger("kind") = 7, "auto-import completion offers installed Types in type positions")
+autoImportDocument.text = "SuperStrict~nLocal kind:Int = Fi"
+catalogueImplementationContext.Forget(autoImportDocument.uri)
+Check(FindCompletionItem(TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 1, 19)), "FileType") = Null, "auto-import completion waits for a selective three-character prefix")
+autoImportDocument.text = "SuperStrict~nFunction FileType:Int(path:String)~nReturn 1~nEnd Function~nLocal kind:Int = FileT"
+catalogueImplementationContext.Forget(autoImportDocument.uri)
+Check(CompletionItemCount(TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 4, 27)), "FileType") = 1, "a visible declaration suppresses installed auto-import candidates with the same name")
+autoImportDocument.text = "SuperStrict~nImport beta.second~nLocal kind:Int = FileT"
+catalogueImplementationContext.Forget(autoImportDocument.uri)
+autoImportItems = TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 2, 27))
+Local importedAutoEdit:Int
+For Local autoImportIndex:Int = 0 Until autoImportItems.Size()
+	Local importedItem:TJSONObject = TJSONObject(autoImportItems.Get(autoImportIndex))
+	If importedItem.GetString("label") = "FileType" And importedItem.Get("additionalTextEdits") Then importedAutoEdit = True
+Next
+Check(CompletionItemCount(autoImportItems, "FileType") = 2 And Not importedAutoEdit, "an already imported module provides ordinary overload completion without duplicate import edits")
+autoImportDocument.text = "Local kind:Int = FileT"
+catalogueImplementationContext.Forget(autoImportDocument.uri)
+autoImportItem = FindCompletionItem(TJSONArray(TBlitzMaxLspCompletion.Query(autoImportDocument, catalogueImplementationContext, 0, 22)), "FileType")
+autoImportEdit = TJSONObject(TJSONArray(autoImportItem.Get("additionalTextEdits")).Get(0))
+Check(autoImportEdit.GetString("newText") = "Import beta.second~n~n" And TJSONObject(TJSONObject(autoImportEdit.Get("range")).Get("start")).GetInteger("character") = 0, "auto-import completion tolerates incomplete files without a source-mode declaration")
 Local installedTypeImplementations:TJSONArray = TJSONArray(TBlitzMaxLspImplementation.Query(catalogueImplementationDocument, catalogueImplementationContext, store, 2, 15))
 Check(installedTypeImplementations.Size() = 1 And HasLocation(installedTypeImplementations, "file://" + catalogueBetaDirectory + "/second.bmx", 2, 5), "go to implementation discovers unimported installed-module Types while suppressing raw interface locations")
 Local installedMethodImplementations:TJSONArray = TJSONArray(TBlitzMaxLspImplementation.Query(catalogueImplementationDocument, catalogueImplementationContext, store, 3, 8))
@@ -518,7 +566,7 @@ Check(installedWorkspaceType <> Null And installedWorkspaceType.GetString("conta
 Check(TJSONArray(TBlitzMaxLspWorkspaceSymbols.Query("TNoSource", catalogueWorkspaceStore, store)).Size() = 0, "workspace symbols suppress declarations without .bmx source provenance")
 Local unchangedCatalogueGeneration:Int = installedCatalogue.generation
 Check(Not installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies) And installedCatalogue.generation = unchangedCatalogueGeneration, "unchanged interfaces reuse the existing catalogue generation")
-SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nTAdded^Object{ '@source ~qsecond.bmx~q,9,0~n}F=~qbeta_second_TAdded~q", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
+SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nFileType:Int(path:String)=~qbeta_second_FileType~q '@source ~qsecond.bmx~q,11,0~nFileType:Int(path:String,followLinks:Int)=~qbeta_second_FileType2~q '@source ~qsecond.bmx~q,14,0~nTAdded^Object{ '@source ~qsecond.bmx~q,17,0~n}F=~qbeta_second_TAdded~q", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
 Check(installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies) And installedCatalogue.catalogue.SymbolsQualified("beta.second.TAdded").length = 1, "changed interfaces refresh their indexed declarations")
 DeleteFile(catalogueAlphaDirectory + "/first." + catalogueMung + ".i")
 Check(installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies) And installedCatalogue.catalogue.FindModule("alpha.first") = Null, "removed interfaces leave the catalogue")
