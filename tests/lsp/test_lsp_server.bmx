@@ -456,9 +456,9 @@ SaveText("SuperStrict~nType TThird~nEnd Type", catalogueAlphaThirdDirectory + "/
 SaveText("SuperStrict~nType TDeep~nEnd Type", catalogueAlphaNestedDirectory + "/deep.bmx")
 SaveText("SuperStrict~nImport alpha.first~nType TSecond Implements IFirst~nMethod Run:Int(amount:Int)~nReturn amount~nEnd Method~nEnd Type~nRem~nbbdoc: Returns the kind of a file.~nEnd Rem~nFunction FileType:Int(path:String)~nReturn 1~nEnd Function~nFunction FileType:Int(path:String, followLinks:Int)~nReturn 1~nEnd Function", catalogueBetaDirectory + "/second.bmx")
 SaveText("IFirst^Null{ '@source ~qfirst.bmx~q,2,0~n-Run:Int(value:Int) '@source ~qfirst.bmx~q,3,0~n}AI=~qalpha_first_IFirst~q", catalogueAlphaDirectory + "/first." + catalogueMung + ".i")
-SaveText("TThird^Object{ '@source ~qthird.bmx~q,2,0~n}F=~qalpha_third_TThird~q", catalogueAlphaThirdDirectory + "/third." + catalogueMung + ".i")
+SaveText("TThird^Object{ '@source ~qthird.bmx~q,2,0~n}F=~qalpha_third_TThird~q~nSharedProbe:Int()=~qalpha_third_SharedProbe~q", catalogueAlphaThirdDirectory + "/third." + catalogueMung + ".i")
 SaveText("TDeep^Object{ '@source ~qdeep.bmx~q,2,0~n}F=~qalpha_first_deep_TDeep~q", catalogueAlphaNestedDirectory + "/deep." + catalogueMung + ".i")
-SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nFileType:Int(path:String)=~qbeta_second_FileType~q '@source ~qsecond.bmx~q,11,0~nFileType:Int(path:String,followLinks:Int)=~qbeta_second_FileType2~q '@source ~qsecond.bmx~q,14,0", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
+SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nFileType:Int(path:String)=~qbeta_second_FileType~q '@source ~qsecond.bmx~q,11,0~nFileType:Int(path:String,followLinks:Int)=~qbeta_second_FileType2~q '@source ~qsecond.bmx~q,14,0~nSharedProbe:Int()=~qbeta_second_SharedProbe~q", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
 Local catalogueDependencies:TLspDependencyCache = New TLspDependencyCache
 Local installedCatalogue:TLspInstalledModuleCatalogue = New TLspInstalledModuleCatalogue
 Check(installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies), "installed catalogue performs its initial discovery")
@@ -492,6 +492,8 @@ catalogueImplementationConfiguration.useDependencySnapshots = True
 catalogueImplementationConfiguration.requireCoreInterface = False
 Local catalogueImplementationStore:TLspInstalledModuleCatalogueStore = New TLspInstalledModuleCatalogueStore
 Local catalogueImplementationContext:TLspWorkspaceContext = TLspWorkspaceContext.Create("file:///catalogue-implementation", "catalogue implementation", catalogueImplementationConfiguration, catalogueDependencies, Null, catalogueImplementationStore)
+Check(TBlitzMaxLspCodeActions.UniqueModuleForValue(catalogueImplementationContext, "FileType") = "beta.second", "missing-import lookup treats overloads in one module as one exact match")
+Check(TBlitzMaxLspCodeActions.UniqueModuleForValue(catalogueImplementationContext, "SharedProbe") = "", "missing-import lookup declines an exact name exported by multiple modules")
 Local catalogueImplementationDocument:TLspDocument = New TLspDocument
 catalogueImplementationDocument.uri = "file:///catalogue-implementation/main.bmx"
 catalogueImplementationDocument.path = "/catalogue-implementation/main.bmx"
@@ -566,7 +568,7 @@ Check(installedWorkspaceType <> Null And installedWorkspaceType.GetString("conta
 Check(TJSONArray(TBlitzMaxLspWorkspaceSymbols.Query("TNoSource", catalogueWorkspaceStore, store)).Size() = 0, "workspace symbols suppress declarations without .bmx source provenance")
 Local unchangedCatalogueGeneration:Int = installedCatalogue.generation
 Check(Not installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies) And installedCatalogue.generation = unchangedCatalogueGeneration, "unchanged interfaces reuse the existing catalogue generation")
-SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nFileType:Int(path:String)=~qbeta_second_FileType~q '@source ~qsecond.bmx~q,11,0~nFileType:Int(path:String,followLinks:Int)=~qbeta_second_FileType2~q '@source ~qsecond.bmx~q,14,0~nTAdded^Object{ '@source ~qsecond.bmx~q,17,0~n}F=~qbeta_second_TAdded~q", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
+SaveText("superstrict~nimport alpha.first~nTSecond^Object@IFirst{ '@source ~qsecond.bmx~q,3,0~n-Run:Int(amount:Int) '@source ~qsecond.bmx~q,4,0~n}F=~qbeta_second_TSecond~q~nTNoSource^Object@IFirst{~n-Run:Int(amount:Int)~n}F=~qbeta_second_TNoSource~q~nFileType:Int(path:String)=~qbeta_second_FileType~q '@source ~qsecond.bmx~q,11,0~nFileType:Int(path:String,followLinks:Int)=~qbeta_second_FileType2~q '@source ~qsecond.bmx~q,14,0~nSharedProbe:Int()=~qbeta_second_SharedProbe~q~nTAdded^Object{ '@source ~qsecond.bmx~q,17,0~n}F=~qbeta_second_TAdded~q", catalogueBetaDirectory + "/second." + catalogueMung + ".i")
 Check(installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies) And installedCatalogue.catalogue.SymbolsQualified("beta.second.TAdded").length = 1, "changed interfaces refresh their indexed declarations")
 DeleteFile(catalogueAlphaDirectory + "/first." + catalogueMung + ".i")
 Check(installedCatalogue.Refresh(catalogueConfiguration, catalogueDependencies) And installedCatalogue.catalogue.FindModule("alpha.first") = Null, "removed interfaces leave the catalogue")
@@ -1855,8 +1857,28 @@ postfixDiagnosticStart.Set("character", 4)
 responses = codeActionServer.HandlePayload(CodeActionPayload(85, codeActionUri, postfixDiagnosticRange, requestedPostfixDiagnostics, "quickfix"))
 Check(TJSONArray(ObjectFrom(responses[0]).Get("result")).Size() = 0, "a stale or fabricated BMX2105 range receives no edit")
 
+Local missingImportUri:String = "file:///tmp/missing-import-quick-fix.bmx"
+Local missingImportSource:String = "SuperStrict~n~nImport brl.filesystem~n~n~nPrint FileType(~qhello~q)"
+responses = codeActionServer.HandlePayload(DidOpenPayload(missingImportUri, missingImportSource))
+Local missingImportPublication:TJSONObject = ObjectFrom(responses[0])
+Local missingImportDiagnostics:TJSONArray = TJSONArray(TJSONObject(missingImportPublication.Get("params")).Get("diagnostics"))
+Local unresolvedPrintDiagnostic:TJSONObject = FindProtocolDiagnostic(missingImportDiagnostics, "BMX3300")
+Check(unresolvedPrintDiagnostic <> Null And unresolvedPrintDiagnostic.GetString("message").Contains("'Print'"), "an unresolved Print publishes BMX3300")
+Local unresolvedPrintRange:TJSONObject = TJSONObject(unresolvedPrintDiagnostic.Get("range"))
+Local requestedPrintDiagnostics:TJSONArray = JsonArray()
+requestedPrintDiagnostics.Append(unresolvedPrintDiagnostic)
+responses = codeActionServer.HandlePayload(CodeActionPayload(86, missingImportUri, unresolvedPrintRange, requestedPrintDiagnostics, "quickfix"))
+Local missingImportActions:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(missingImportActions.Size() = 1, "a uniquely installed unresolved value offers one missing-import quick fix")
+Local importStandardIoAction:TJSONObject = TJSONObject(missingImportActions.Get(0))
+Local missingImportEdits:TJSONArray = WorkspaceEditEdits(TJSONObject(importStandardIoAction.Get("edit")), missingImportUri)
+Local missingImportEdit:TJSONObject = TJSONObject(missingImportEdits.Get(0))
+Local missingImportEditStart:TJSONObject = TJSONObject(TJSONObject(missingImportEdit.Get("range")).Get("start"))
+Check(importStandardIoAction.GetString("title") = "Import brl.standardio" And importStandardIoAction.GetBool("isPreferred"), "the BRL.StandardIO import is the preferred unresolved-Print quick fix")
+Check(missingImportEdits.Size() = 1 And missingImportEdit.GetString("newText") = "~nImport brl.standardio" And missingImportEditStart.GetInteger("line") = 2, "the missing-import quick fix extends the existing import group")
+
 Local implicitConversionServer:TBlitzMaxLspServer = NewTestServer()
-implicitConversionServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:86,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
+implicitConversionServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:87,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
 Local implicitConversionUri:String = "file:///tmp/implicit-string-numeric.bmx"
 Local implicitConversionSource:String = "SuperStrict~nType TBox<T>~nField value:T~nMethod New(value:T)~nSelf.value=value~nEnd Method~nEnd Type~nType TPair<A,B>~nField first:A~nField second:B~nEnd Type~nLocal box:TBox<Int>=New TBox<Int>(~qhello~q)~nLocal pair:TPair<String,TBox<Int>>~npair.second.value=~qhello~q"
 responses = implicitConversionServer.HandlePayload(DidOpenPayload(implicitConversionUri, implicitConversionSource))
