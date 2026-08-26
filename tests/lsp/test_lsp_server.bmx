@@ -537,13 +537,17 @@ Local alternateNestedDirectory:String = catalogueSdk + "/mod/alpha.first.mod/dee
 CreateDir(alternateNestedDirectory, True)
 SaveText("SuperStrict~nType TDeepDuplicate~nEnd Type", alternateNestedDirectory + "/deep.bmx")
 SaveText("TDeepDuplicate^Object{~n}F=~qalpha_first_deep_TDeepDuplicate~q", alternateNestedDirectory + "/deep." + catalogueMung + ".i")
-Local invalidNestedDirectory:Int
+Local invalidNestedWarnings:TList = New TList
+Local catalogueWithInvalidDirectory:TMap = TLspInstalledModuleCatalogue.Discover(catalogueConfiguration, invalidNestedWarnings)
+Check(catalogueWithInvalidDirectory.Contains("alpha.first.deep") And catalogueWithInvalidDirectory.Contains("beta.second"), "installed catalogue skips an invalid .mod directory and its subtree without losing valid modules")
+Check(invalidNestedWarnings.Count() = 1 And String(invalidNestedWarnings.First()).Contains("basename 'alpha.first' must be a single BlitzMax identifier"), "installed catalogue reports skipped malformed module directories")
+Local strictInvalidNestedDirectory:Int
 Try
-	TLspInstalledModuleCatalogue.Discover(catalogueConfiguration)
+	EnumModuleDirectories(catalogueSdk + "/mod")
 Catch exception:Object
-	invalidNestedDirectory = String(exception).Contains("basename 'alpha.first' must be a single BlitzMax identifier")
+	strictInvalidNestedDirectory = String(exception).Contains("basename 'alpha.first' must be a single BlitzMax identifier")
 End Try
-Check(invalidNestedDirectory, "installed catalogue rejects dotted .mod directory basenames")
+Check(strictInvalidNestedDirectory, "shared module enumeration remains strict unless a caller explicitly collects malformed-directory issues")
 Local duplicateNestedModules:TMap = New TMap
 TLspInstalledModuleCatalogue.AddDiscovered(duplicateNestedModules, "alpha.first.deep", "/first/deep.i", False)
 Local ambiguousNestedCatalogue:Int
