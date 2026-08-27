@@ -11,4 +11,4 @@ mkdir -p "$output_root"
 result=$("$application" | tr -d '\r')
 test "$result" = "generic-composition-matrix-runtime-ok"
 
-echo "bcc2 generic composition native matrix passed: 16 cases"
+echo "bcc2 generic composition native matrix passed: 17 cases"

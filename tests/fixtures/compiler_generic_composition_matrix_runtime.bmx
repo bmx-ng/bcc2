@@ -10,6 +10,38 @@ Type TMatrixPayload
 	End Method
 End Type
 
+Type TMatrixOrdered<T>
+	Field value:T
+
+	Method New(value:T)
+		Self.value = value
+	End Method
+
+	Method Operator <:Int(other:TMatrixOrdered<T>)
+		Return value < other.value
+	End Method
+
+	Method Operator >:Int(other:TMatrixOrdered<T>)
+		Return value > other.value
+	End Method
+
+	Method Before:Int(other:TMatrixOrdered<T>)
+		Return value < other.value
+	End Method
+
+	Method After:Int(other:TMatrixOrdered<T>)
+		Return value > other.value
+	End Method
+
+	Method AtMost:Int(other:TMatrixOrdered<T>)
+		Return value <= other.value
+	End Method
+
+	Method AtLeast:Int(other:TMatrixOrdered<T>)
+		Return value >= other.value
+	End Method
+End Type
+
 Struct SMatrixPair<T>
 	Field value:T
 	Field transform:Closure<T(value:T)>
@@ -182,9 +214,19 @@ Function RunInheritedOwner()
 	If baseClosure.Values().length <> 1 Or baseClosure.Values()[0]() <> 42 Then Throw "inheritance-closure: inherited field"
 End Function
 
+Function RunStringOrdering()
+	Local first:TMatrixOrdered<String> = New TMatrixOrdered<String>("alpha")
+	Local second:TMatrixOrdered<String> = New TMatrixOrdered<String>("beta")
+	If Not first.Before(second) Then Throw "generic String <: ordering was lost"
+	If Not second.After(first) Then Throw "generic String >: ordering was lost"
+	If Not first.AtMost(first) Then Throw "generic String <= ordering was lost"
+	If Not second.AtLeast(first) Then Throw "generic String >= ordering was lost"
+End Function
+
 RunTypeOwner()
 RunStructOwner()
 RunMethodOwner()
 RunInheritedOwner()
+RunStringOrdering()
 
 Print "generic-composition-matrix-runtime-ok"
