@@ -938,6 +938,22 @@ Local functionContextItems:TJSONArray = TJSONArray(TBlitzMaxLspCompletion.Query(
 Check(FindCompletionItem(functionContextItems, "total") <> Null And FindCompletionItem(functionContextItems, "StaticWork") <> Null, "type Functions receive static member completions")
 Check(FindCompletionItem(functionContextItems, "value") = Null And FindCompletionItem(functionContextItems, "Work") = Null, "type Functions exclude implicit instance members")
 
+Local stringCompletionDocument:TLspDocument = New TLspDocument
+stringCompletionDocument.uri = "file:///first/string-completion.bmx"
+stringCompletionDocument.path = "/first/string-completion.bmx"
+stringCompletionDocument.text = "SuperStrict~nFunction MakeText:String()~nReturn ~qtext~q~nEnd Function~nFunction Accept(value:String)~nEnd Function~nAccept(~qhello~q)~nAccept(~q~q)~nAccept(~qunfinished"
+Local stringCompletionAnalysis:TLanguageAnalysis = firstContext.Analyze(stringCompletionDocument)
+Local closedStringOffset:Int = stringCompletionDocument.text.Find("~qhello~q") + "~qhel".length
+Local closedStringPosition:TSourcePosition = stringCompletionAnalysis.syntaxTree.source.Position(closedStringOffset)
+Check(TJSONArray(TBlitzMaxLspCompletion.Query(stringCompletionDocument, firstContext, closedStringPosition.line, closedStringPosition.column)).Size() = 0, "ordinary completion is suppressed within a populated String literal")
+Local emptyStringOffset:Int = stringCompletionDocument.text.Find("Accept(~q~q)") + "Accept(~q".length
+Local emptyStringPosition:TSourcePosition = stringCompletionAnalysis.syntaxTree.source.Position(emptyStringOffset)
+Check(TJSONArray(TBlitzMaxLspCompletion.Query(stringCompletionDocument, firstContext, emptyStringPosition.line, emptyStringPosition.column)).Size() = 0, "ordinary completion is suppressed between the quotes of an empty String literal")
+Local unterminatedStringPosition:TSourcePosition = stringCompletionAnalysis.syntaxTree.source.Position(stringCompletionDocument.text.length)
+Check(TJSONArray(TBlitzMaxLspCompletion.Query(stringCompletionDocument, firstContext, unterminatedStringPosition.line, unterminatedStringPosition.column)).Size() = 0, "ordinary completion is suppressed at the end of an unterminated String literal during live editing")
+Local afterStringOffset:Int = stringCompletionDocument.text.Find("~qhello~q") + "~qhello~q".length
+Check(Not TBlitzMaxLspCompletion.IsStringContentPosition(TSyntaxNavigator.Create(stringCompletionAnalysis.syntaxTree), afterStringOffset), "the position immediately after a closing quote is not treated as String content")
+
 Local rankedCompletionDocument:TLspDocument = New TLspDocument
 rankedCompletionDocument.uri = "file:///first/ranked-completion.bmx"
 rankedCompletionDocument.path = "/first/ranked-completion.bmx"
