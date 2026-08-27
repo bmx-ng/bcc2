@@ -423,6 +423,7 @@ Check(cancellationResponse, "threaded dispatch returns the standard cancellation
 Local store:TLspDocumentStore = New TLspDocumentStore
 Local document:TLspDocument = store.Open("file:///tmp/hello%20caf%C3%A9.bmx", "blitzmax", 1, "SuperStrict")
 Check(document.path = "/tmp/hello café.bmx", "UTF-8 file URI is decoded")
+Check(FileUriForPath("/tmp/hello café #1.bmx") = "file:///tmp/hello%20caf%C3%A9%20%231.bmx", "source-link file URIs encode UTF-8 and reserved path characters")
 Check(store.Count() = 1, "document opens")
 store.Change(document.uri, 2, "SuperStrict~nLocal value:Int")
 Check(store.Get(document.uri).version = 2, "document version changes")
@@ -750,7 +751,7 @@ Local existingPosition:TSourcePosition = diskInterfaceAnalysis.syntaxTree.source
 Local existingDefinition:TJSONObject = TJSONObject(TBlitzMaxLspNavigation.Definition(liveParserDocument, liveUnitContext, liveUnitStore, existingPosition.line, existingPosition.column))
 Check(existingDefinition.GetString("uri") = liveDeclDocument.uri, "disk interface reference redirects to the matching live included declaration")
 Local existingHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(liveParserDocument, liveUnitContext, existingPosition.line, existingPosition.column))
-Check(TJSONObject(existingHover.Get("contents")).GetString("value").Contains("Defined in `" + liveUnitDeclPath + "`"), "hover prefers live included-source provenance over the disk interface")
+Check(TJSONObject(existingHover.Get("contents")).GetString("value").Contains("Defined in [`decl.bmx:1`](file://" + liveUnitDeclPath + "#L1)"), "hover links live included-source provenance to its declaration line")
 liveUnitStore.Change(liveDeclDocument.uri, 2, "Global ExistingValue:Int~nGlobal LiveValue:Int")
 Check(liveUnitContext.Analyze(liveDeclDocument).Succeeded(), "edited include refreshes its owning source compilation unit")
 liveParserDocument.text :+ "~nLocal second:Int = LiveValue"
@@ -772,7 +773,7 @@ Local arrayTypeHoverOffset:Int = arrayTypeHoverDocument.text.Find("TNewsEventSpo
 Local arrayTypeHoverPosition:TSourcePosition = arrayTypeHoverAnalysis.syntaxTree.source.Position(arrayTypeHoverOffset)
 Local arrayTypeHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(arrayTypeHoverDocument, firstContext, arrayTypeHoverPosition.line, arrayTypeHoverPosition.column))
 Local arrayTypeHoverText:String = TJSONObject(arrayTypeHover.Get("contents")).GetString("value")
-Check(arrayTypeHoverText.Contains("Type TNewsEventSportTeam") And arrayTypeHoverText.Contains("Defined in `/first/array-type-hover.bmx`"), "array element type hover presents its named declaration and provenance")
+Check(arrayTypeHoverText.Contains("Type TNewsEventSportTeam") And arrayTypeHoverText.Contains("Defined in [`array-type-hover.bmx:2`](file:///first/array-type-hover.bmx#L2)"), "array element type hover links its local declaration provenance")
 Local genericMemberHoverDocument:TLspDocument = New TLspDocument
 genericMemberHoverDocument.uri = "file:///first/generic-member-hover.bmx"
 genericMemberHoverDocument.path = "/first/generic-member-hover.bmx"
@@ -1333,6 +1334,7 @@ Local documentationHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(docum
 Check(documentationHover <> Null And TJSONObject(documentationHover.Get("contents")) <> Null, "documented source hover is available")
 Local documentationHoverValue:String = TJSONObject(documentationHover.Get("contents")).GetString("value")
 Check(documentationHoverValue.Contains("Adds [TDocValue](file:///first/documentation.bmx#L12) values."), "bbdoc references become source links in hover Markdown")
+Check(documentationHoverValue.Contains("Defined in [`documentation.bmx:9`](file:///first/documentation.bmx#L9)"), "local routine hover links directly to its declaration line")
 Check(documentationHoverValue.Contains("**left** - The **left** value.") And documentationHoverValue.Contains("**Returns:** The combined value."), "hover links ordered param entries to routine parameters and renders custom emphasis")
 Check(documentationHoverValue.Contains("Additional **Markdown** detail."), "bbdoc about sections preserve Markdown")
 Local documentationSignature:TJSONObject = TJSONObject(TBlitzMaxLspNavigation.SignatureHelp(documentationDocument, firstContext, 13, 23))
@@ -1379,6 +1381,7 @@ Check(provenanceTypeDefinition.GetString("uri").EndsWith("/mod/brl.mod/stream.mo
 Local provenanceHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(provenanceDocument, provenanceContext, 2, 16))
 Local provenanceHoverContents:TJSONObject = TJSONObject(provenanceHover.Get("contents"))
 Check(provenanceHoverContents.GetString("value").Contains("/brl.mod/stream.mod/stream.bmx") And Not provenanceHoverContents.GetString("value").Contains(".arm64.i"), "hover presents original source rather than compiler interface")
+Check(provenanceHoverContents.GetString("value").Contains("Defined in `BRL.Stream` · [`stream.bmx:5`](file:///tmp/blitzmax-lsp-provenance-sdk/mod/brl.mod/stream.mod/stream.bmx#L5)"), "imported hover labels its module and links to exact source provenance")
 Check(provenanceHoverContents.GetString("value").Contains("Compiler interface wrapper."), "hover lazily recovers bbdoc from compiler-interface source provenance")
 Local provenanceDefinition:TJSONObject = TJSONObject(TBlitzMaxLspNavigation.Definition(provenanceDocument, provenanceContext, store, 2, 16))
 Local provenanceDefinitionStart:TJSONObject = TJSONObject(TJSONObject(provenanceDefinition.Get("range")).Get("start"))
