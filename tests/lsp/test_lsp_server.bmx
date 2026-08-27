@@ -267,6 +267,26 @@ Function WorkspaceEditEdits:TJSONArray(edit:TJSONObject, uri:String)
 	Return TJSONArray(changes.Get(uri))
 End Function
 
+Function VersionedWorkspaceEdit:TJSONObject(edit:TJSONObject)
+	If Not edit Then Return Null
+	Local changes:TJSONArray = TJSONArray(edit.Get("documentChanges"))
+	If Not changes Or changes.Size() <> 1 Then Return Null
+	Return TJSONObject(changes.Get(0))
+End Function
+
+Function PointRange:TJSONObject(line:Int, character:Int)
+	Local position:TJSONObject = JsonObject()
+	position.Set("line", line)
+	position.Set("character", character)
+	Local range:TJSONObject = JsonObject()
+	range.Set("start", position)
+	Local finish:TJSONObject = JsonObject()
+	finish.Set("line", line)
+	finish.Set("character", character)
+	range.Set("end", finish)
+	Return range
+End Function
+
 Function FindProtocolDiagnostic:TJSONObject(items:TJSONArray, code:String)
 	If Not items Then Return Null
 	For Local index:Int = 0 Until items.Size()
@@ -296,6 +316,12 @@ Function CodeActionPayload:String(id:Int, uri:String, range:TJSONObject, diagnos
 	request.Set("method", "textDocument/codeAction")
 	request.Set("params", params)
 	Return request.SaveString(JSON_COMPACT)
+End Function
+
+Function CodeActionsAt:TJSONArray(server:TBlitzMaxLspServer, id:Int, uri:String, line:Int, character:Int = 0, onlyKind:String = "refactor.rewrite")
+	Local responses:String[] = server.HandlePayload(CodeActionPayload(id, uri, PointRange(line, character), JsonArray(), onlyKind))
+	If Not responses.length Then Return Null
+	Return TJSONArray(ObjectFrom(responses[0]).Get("result"))
 End Function
 
 Function AllEditsUseName:Int(edits:TJSONArray, name:String)
@@ -1756,10 +1782,12 @@ Local legacyServer:TBlitzMaxLspServer = NewTestServer()
 legacyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:1,~qmethod~q:~qinitialize~q,~qparams~q:{~qrootUri~q:~qfile:///legacy~q}}")
 Check(legacyServer.workspaces.Get("file:///legacy") <> Null, "legacy rootUri initializes a workspace")
 Check(Not legacyServer.completionSnippetSupport, "a client which does not advertise snippet support retains plain-text completion edits")
+Check(Not legacyServer.workspaceSnippetEditSupport, "a legacy client retains plain-text workspace edits")
 
 Local snippetCapabilityServer:TBlitzMaxLspServer = NewTestServer()
-snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:1,~qmethod~q:~qinitialize~q,~qparams~q:{~qcapabilities~q:{~qtextDocument~q:{~qcompletion~q:{~qcompletionItem~q:{~qsnippetSupport~q:true}}}}}}")
+snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:1,~qmethod~q:~qinitialize~q,~qparams~q:{~qcapabilities~q:{~qtextDocument~q:{~qcompletion~q:{~qcompletionItem~q:{~qsnippetSupport~q:true}}},~qworkspace~q:{~qworkspaceEdit~q:{~qsnippetEditSupport~q:true}}}}}")
 Check(snippetCapabilityServer.completionSnippetSupport, "initialize records completion-item snippet support from the client capabilities")
+Check(snippetCapabilityServer.workspaceSnippetEditSupport, "initialize records workspace snippet-edit support independently")
 snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didOpen~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/snippet-capability.bmx~q,~qlanguageId~q:~qblitzmax~q,~qversion~q:1,~qtext~q:~qSuperStrict\nFunction Add:Int(left:Int, right:Int)\nReturn left + right\nEnd Function\nAd~q}}}")
 Local snippetCapabilityResponses:String[] = snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:2,~qmethod~q:~qtextDocument/completion~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/snippet-capability.bmx~q},~qposition~q:{~qline~q:4,~qcharacter~q:2}}}")
 Local snippetCapabilityResult:TJSONArray = TJSONArray(ObjectFrom(snippetCapabilityResponses[0]).Get("result"))
@@ -1779,7 +1807,7 @@ Check(capabilities.Get("documentLinkProvider") <> Null, "initialize advertises d
 Check(capabilities.GetBool("referencesProvider"), "initialize advertises references")
 Local codeActionCapability:TJSONObject = TJSONObject(capabilities.Get("codeActionProvider"))
 Local codeActionKinds:TJSONArray = TJSONArray(codeActionCapability.Get("codeActionKinds"))
-Check(codeActionCapability <> Null And Not codeActionCapability.GetBool("resolveProvider") And codeActionKinds.Size() = 1 And TJSONString(codeActionKinds.Get(0)).Value() = "quickfix", "initialize advertises resolved quick-fix code actions")
+Check(codeActionCapability <> Null And Not codeActionCapability.GetBool("resolveProvider") And codeActionKinds.Size() = 2 And TJSONString(codeActionKinds.Get(0)).Value() = "quickfix" And TJSONString(codeActionKinds.Get(1)).Value() = "refactor.rewrite", "initialize advertises quick fixes and rewrite refactorings")
 Local completionCapability:TJSONObject = TJSONObject(capabilities.Get("completionProvider"))
 Check(completionCapability <> Null And completionCapability.GetBool("resolveProvider"), "initialize advertises lazy completion documentation resolution")
 Local completionTriggers:TJSONArray = TJSONArray(completionCapability.Get("triggerCharacters"))
@@ -1892,6 +1920,83 @@ Local missingImportEdit:TJSONObject = TJSONObject(missingImportEdits.Get(0))
 Local missingImportEditStart:TJSONObject = TJSONObject(TJSONObject(missingImportEdit.Get("range")).Get("start"))
 Check(importStandardIoAction.GetString("title") = "Import brl.standardio" And importStandardIoAction.GetBool("isPreferred"), "the BRL.StandardIO import is the preferred unresolved-Print quick fix")
 Check(missingImportEdits.Size() = 1 And missingImportEdit.GetString("newText") = "~nImport brl.standardio" And missingImportEditStart.GetInteger("line") = 2, "the missing-import quick fix extends the existing import group")
+
+Local bbdocServer:TBlitzMaxLspServer = NewTestServer()
+bbdocServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:90,~qmethod~q:~qinitialize~q,~qparams~q:{~qcapabilities~q:{~qworkspace~q:{~qworkspaceEdit~q:{~qsnippetEditSupport~q:true}}}}}")
+Local bbdocUri:String = "file:///tmp/generated-bbdoc.bmx"
+Local bbdocSource:String = "SuperStrict~nType TSample~n~tField value:Int~n~tMethod Hello:String(x:Int, y:Int)~n~t~tReturn ~qok~q~n~tEnd Method~n~tMethod Reset()~n~tEnd Method~n~tMethod New(value:Int)~n~tEnd Method~nEnd Type~nStruct TValue~nEnd Struct~nInterface IThing~n~tMethod Run:Int(input:String)~nEnd Interface~nEnum TChoice~n~tFirst~nEnd Enum~nGlobal count:Int~nConst LIMIT:Int = 1~nLocal excluded:Int"
+bbdocServer.HandlePayload(DidOpenPayload(bbdocUri, bbdocSource, 7))
+Local bbdocActions:TJSONArray = CodeActionsAt(bbdocServer, 91, bbdocUri, 3, 8, "refactor")
+Check(bbdocActions.Size() = 1, "a parent refactor filter includes generated bbdoc rewrites on a routine header")
+Local helloBBDocAction:TJSONObject = TJSONObject(bbdocActions.Get(0))
+Check(helloBBDocAction.GetString("title") = "Generate bbdoc for Method Hello" And helloBBDocAction.GetString("kind") = "refactor.rewrite.bbdoc", "generated routine bbdoc has a specific title and action kind")
+Local helloDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(helloBBDocAction.Get("edit")))
+Local helloIdentifier:TJSONObject = TJSONObject(helloDocumentEdit.Get("textDocument"))
+Local helloEdits:TJSONArray = TJSONArray(helloDocumentEdit.Get("edits"))
+Local helloSnippetEdit:TJSONObject = TJSONObject(helloEdits.Get(0))
+Local helloSnippet:TJSONObject = TJSONObject(helloSnippetEdit.Get("snippet"))
+Check(helloIdentifier.GetString("uri") = bbdocUri And helloIdentifier.GetInteger("version") = 7 And helloEdits.Size() = 1, "generated bbdoc uses a versioned document edit")
+Check(helloSnippet.GetString("kind") = "snippet" And helloSnippet.GetString("value") = "~tRem~n~tbbdoc: ${1:Summary of Hello.}~n~treturns: ${2:Description of the returned value.}~n~tparam: ${3:Description of x.}~n~tparam: ${4:Description of y.}~n~tEnd Rem~n$0", "routine bbdoc snippets provide contextual tab stops without an about section")
+Local helloInsertStart:TJSONObject = TJSONObject(TJSONObject(helloSnippetEdit.Get("range")).Get("start"))
+Check(helloInsertStart.GetInteger("line") = 3 And helloInsertStart.GetInteger("character") = 0, "generated bbdoc inserts before the declaration indentation")
+Check(CodeActionsAt(bbdocServer, 92, bbdocUri, 4, 2).Size() = 0, "generated bbdoc is not offered from inside a routine body")
+Check(CodeActionsAt(bbdocServer, 93, bbdocUri, 1, 2).Size() = 1, "type declarations offer summary documentation")
+Local fieldActions:TJSONArray = CodeActionsAt(bbdocServer, 94, bbdocUri, 2, 5)
+Local fieldDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(fieldActions.Get(0)).Get("edit")))
+Local fieldSnippet:TJSONObject = TJSONObject(TJSONObject(TJSONArray(fieldDocumentEdit.Get("edits")).Get(0)).Get("snippet"))
+Check(fieldSnippet.GetString("value") = "~tRem~n~tbbdoc: ${1:Summary of value.}~n~tEnd Rem~n$0", "fields receive a concise summary-only bbdoc snippet")
+Local resetActions:TJSONArray = CodeActionsAt(bbdocServer, 95, bbdocUri, 6, 5)
+Local resetDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(resetActions.Get(0)).Get("edit")))
+Local resetSnippet:String = TJSONObject(TJSONObject(TJSONArray(resetDocumentEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
+Check(Not resetSnippet.Contains("returns:") And Not resetSnippet.Contains("param:") And resetSnippet.Contains("Summary of Reset."), "Void routines omit returns and parameter stubs")
+Local constructorActions:TJSONArray = CodeActionsAt(bbdocServer, 96, bbdocUri, 8, 5)
+Local constructorDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(constructorActions.Get(0)).Get("edit")))
+Local constructorSnippet:String = TJSONObject(TJSONObject(TJSONArray(constructorDocumentEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
+Check(Not constructorSnippet.Contains("returns:") And constructorSnippet.Contains("Description of value."), "constructors omit returns while retaining parameter stubs")
+Check(CodeActionsAt(bbdocServer, 97, bbdocUri, 11, 3).Size() = 1 And CodeActionsAt(bbdocServer, 98, bbdocUri, 13, 4).Size() = 1, "Struct and Interface declarations offer generated bbdoc")
+Local interfaceMethodActions:TJSONArray = CodeActionsAt(bbdocServer, 99, bbdocUri, 14, 8)
+Local interfaceMethodEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(interfaceMethodActions.Get(0)).Get("edit")))
+Local interfaceMethodSnippet:String = TJSONObject(TJSONObject(TJSONArray(interfaceMethodEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
+Check(interfaceMethodSnippet.Contains("returns: ${2:Description of the returned value.}") And interfaceMethodSnippet.Contains("param: ${3:Description of input.}"), "abstract interface methods use resolved return and parameter documentation")
+Check(CodeActionsAt(bbdocServer, 100, bbdocUri, 16, 3).Size() = 1 And CodeActionsAt(bbdocServer, 101, bbdocUri, 17, 3).Size() = 1, "Enum declarations and members offer generated bbdoc")
+Check(CodeActionsAt(bbdocServer, 102, bbdocUri, 19, 2).Size() = 1 And CodeActionsAt(bbdocServer, 103, bbdocUri, 20, 2).Size() = 1, "Global and Const declarations offer generated bbdoc")
+Check(CodeActionsAt(bbdocServer, 104, bbdocUri, 21, 2).Size() = 0, "Local declarations are excluded from generated API documentation")
+Check(CodeActionsAt(bbdocServer, 105, bbdocUri, 3, 8, "quickfix").Size() = 0, "quick-fix-only requests exclude generated bbdoc refactorings")
+
+Local existingBBDocUri:String = "file:///tmp/existing-bbdoc.bmx"
+Local existingBBDocSource:String = "SuperStrict~nRem~nbbdoc:~nEnd Rem~nFunction Done()~nEnd Function~nRem~nordinary note~nEnd Rem~nFunction NeedsDocs()~nEnd Function"
+bbdocServer.HandlePayload(DidOpenPayload(existingBBDocUri, existingBBDocSource))
+Check(CodeActionsAt(bbdocServer, 106, existingBBDocUri, 4, 5).Size() = 0, "an attached empty bbdoc marker suppresses duplicate generation")
+Check(CodeActionsAt(bbdocServer, 107, existingBBDocUri, 9, 5).Size() = 1, "an ordinary Rem block does not masquerade as bbdoc")
+
+Local crlfBBDocUri:String = "file:///tmp/crlf-bbdoc.bmx"
+bbdocServer.HandlePayload(DidOpenPayload(crlfBBDocUri, "SuperStrict~r~n  Function WindowsLine:Int(value:Int)~r~n  Return value~r~n  End Function"))
+Local crlfActions:TJSONArray = CodeActionsAt(bbdocServer, 108, crlfBBDocUri, 1, 4)
+Local crlfDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(crlfActions.Get(0)).Get("edit")))
+Local crlfSnippet:String = TJSONObject(TJSONObject(TJSONArray(crlfDocumentEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
+Check(crlfSnippet.StartsWith("  Rem~r~n  bbdoc: ${1:Summary of WindowsLine.}~r~n") And crlfSnippet.Contains("  End Rem~r~n$0"), "generated bbdoc preserves declaration indentation and CRLF line endings")
+
+Local strictBBDocUri:String = "file:///tmp/strict-bbdoc.bmx"
+bbdocServer.HandlePayload(DidOpenPayload(strictBBDocUri, "Strict~nFunction LegacyDefault()~nReturn 1~nEnd Function"))
+Local strictActions:TJSONArray = CodeActionsAt(bbdocServer, 111, strictBBDocUri, 1, 5)
+Local strictDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(strictActions.Get(0)).Get("edit")))
+Local strictSnippet:String = TJSONObject(TJSONObject(TJSONArray(strictDocumentEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
+Check(strictSnippet.Contains("returns:"), "Strict routines with an implicit Int return include a returns stub from semantic resolution")
+
+Local inlineBBDocUri:String = "file:///tmp/inline-bbdoc.bmx"
+bbdocServer.HandlePayload(DidOpenPayload(inlineBBDocUri, "SuperStrict~nFunction Inline:Int() Return 1 End Function"))
+Check(CodeActionsAt(bbdocServer, 112, inlineBBDocUri, 1, 5).Size() = 1 And CodeActionsAt(bbdocServer, 113, inlineBBDocUri, 1, 27).Size() = 0, "same-line routine bodies do not count as declaration headers")
+
+Local plainBBDocUri:String = "file:///tmp/plain-bbdoc.bmx"
+codeActionServer.HandlePayload(DidOpenPayload(plainBBDocUri, "SuperStrict~nFunction Legacy:Int(value:Int)~nReturn value~nEnd Function", 3))
+Local plainActions:TJSONArray = CodeActionsAt(codeActionServer, 109, plainBBDocUri, 1, 4)
+Local plainDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(plainActions.Get(0)).Get("edit")))
+Local plainEdit:TJSONObject = TJSONObject(TJSONArray(plainDocumentEdit.Get("edits")).Get(0))
+Check(plainEdit.Get("snippet") = Null And plainEdit.GetString("newText") = "Rem~nbbdoc: ~nreturns: ~nparam: ~nEnd Rem~n", "clients without snippet edits receive a plain fill-in skeleton")
+
+Local malformedBBDocUri:String = "file:///tmp/malformed-bbdoc.bmx"
+bbdocServer.HandlePayload(DidOpenPayload(malformedBBDocUri, "SuperStrict~nFunction Broken:Int(value:"))
+Check(CodeActionsAt(bbdocServer, 110, malformedBBDocUri, 1, 8) <> Null, "generated bbdoc remains safe for an incomplete declaration during live editing")
 
 Local implicitConversionServer:TBlitzMaxLspServer = NewTestServer()
 implicitConversionServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:87,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
