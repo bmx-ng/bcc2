@@ -287,6 +287,29 @@ Function PointRange:TJSONObject(line:Int, character:Int)
 	Return range
 End Function
 
+Function PositionAtOrBefore:Int(left:TJSONObject, right:TJSONObject)
+	If Not left Or Not right Then Return False
+	Local leftLine:Int = Int(left.GetInteger("line"))
+	Local rightLine:Int = Int(right.GetInteger("line"))
+	If leftLine <> rightLine Then Return leftLine < rightLine
+	Return left.GetInteger("character") <= right.GetInteger("character")
+End Function
+
+Function DocumentSymbolRangesValid:Int(items:TJSONArray)
+	If Not items Then Return True
+	For Local index:Int = 0 Until items.Size()
+		Local item:TJSONObject = TJSONObject(items.Get(index))
+		If Not item Then Return False
+		Local fullRange:TJSONObject = TJSONObject(item.Get("range"))
+		Local selectionRange:TJSONObject = TJSONObject(item.Get("selectionRange"))
+		If Not fullRange Or Not selectionRange Then Return False
+		If Not PositionAtOrBefore(TJSONObject(fullRange.Get("start")), TJSONObject(selectionRange.Get("start"))) Then Return False
+		If Not PositionAtOrBefore(TJSONObject(selectionRange.Get("end")), TJSONObject(fullRange.Get("end"))) Then Return False
+		If Not DocumentSymbolRangesValid(TJSONArray(item.Get("children"))) Then Return False
+	Next
+	Return True
+End Function
+
 Function FindProtocolDiagnostic:TJSONObject(items:TJSONArray, code:String)
 	If Not items Then Return Null
 	For Local index:Int = 0 Until items.Size()
@@ -2098,6 +2121,13 @@ Local symbolsResponse:TJSONObject = ObjectFrom(responses[0])
 Local documentSymbols:TJSONArray = TJSONArray(symbolsResponse.Get("result"))
 Check(documentSymbols.Size() = 3, "document symbols expose routine and top-level variables")
 Check(TJSONObject(documentSymbols.Get(0)).GetString("name") = "Add", "document symbols preserve declaration order")
+Local incompleteEnumSymbolUri:String = "file:///tmp/incomplete-enum-rem.bmx"
+featureServer.HandlePayload(DidOpenPayload(incompleteEnumSymbolUri, "SuperStrict~nEnum ETest~n~tRem~n~tOne~n~tTwo~n~tThree~nEnd Enum"))
+responses = featureServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:330,~qmethod~q:~qtextDocument/documentSymbol~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + incompleteEnumSymbolUri + "~q}}}")
+Local incompleteEnumSymbolsResponse:TJSONObject = ObjectFrom(responses[0])
+Local incompleteEnumSymbols:TJSONArray = TJSONArray(incompleteEnumSymbolsResponse.Get("result"))
+Check(incompleteEnumSymbols.Size() = 1 And TJSONObject(incompleteEnumSymbols.Get(0)).GetString("name") = "ETest", "unfinished Rem keeps the surrounding enum in the document outline")
+Check(DocumentSymbolRangesValid(incompleteEnumSymbols), "document-symbol selection ranges remain contained during unfinished Rem editing")
 
 responses = featureServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:34,~qmethod~q:~qtextDocument/documentHighlight~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/features.bmx~q},~qposition~q:{~qline~q:4,~qcharacter~q:6}}}")
 Local highlightsResponse:TJSONObject = ObjectFrom(responses[0])

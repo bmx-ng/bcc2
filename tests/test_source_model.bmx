@@ -652,6 +652,10 @@ Check(TBinaryExpressionSyntax(daysEnum.values[3].value) <> Null, "flags composit
 Check(daysEnum.terminator.endToken.text.ToLower() = "endenum", "combined enum terminator")
 Local stateEnum:TEnumDeclarationSyntax = TEnumDeclarationSyntax(enumResult.syntaxTree.root.members[2])
 Check(TBinaryExpressionSyntax(stateEnum.values[2].value) <> Null, "enum value references prior value")
+Local incompleteEnumResult:TParseResult = TBlitzMaxParser.ParseText("Enum ETest~n~tRem~n~tOne~n~tTwo~n~tThree~nEnd Enum", "incomplete-enum-rem.bmx")
+Local incompleteEnum:TEnumDeclarationSyntax = TEnumDeclarationSyntax(incompleteEnumResult.syntaxTree.root.members[0])
+Check(incompleteEnum <> Null And incompleteEnum.nameToken.text = "ETest", "unfinished Rem retains the recovered enum declaration")
+Check(incompleteEnum.span.start <= incompleteEnum.nameToken.span.start And incompleteEnum.span.EndOffset() >= incompleteEnum.nameToken.span.EndOffset(), "recovered enum span contains its name while the unfinished Rem hides its body")
 
 Local declarationHeaderSource:String = "Type TBox<K, V> Extends TBase<K> Implements IFoo<V>, ICloseable Final {serializable}~nPrivate Field value:V~nProtected~nMethod Get:V()~nReturn value~nEnd Method~nPublic~nFunction Create:TBox<K,V>()~nReturn New TBox<K,V>~nEnd Function~nEnd Type~nInterface IThing<T> Extends IBase<T>, IOther~nMethod Get:T()~nEnd Interface~nStruct SPoint {valueType}~nField x:Double~nField y:Double~nEnd Struct~nType TConstrained<T, U> Where T Extends IBase And ICloseable, U Extends IOther Extends TBase<T> Implements IFoo<U> Abstract {generic}~nEnd Type"
 Local declarationHeaderResult:TParseResult = TBlitzMaxParser.ParseText(declarationHeaderSource, "declaration-headers.bmx")
