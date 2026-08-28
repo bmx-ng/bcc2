@@ -480,6 +480,7 @@ Check(configuration.buildMode = "debug" And Not configuration.useDependencySnaps
 Check(configuration.conditionalSymbols.length = 1 And configuration.conditionalSymbols[0] = "custom", "configured conditional symbols replace defaults")
 Check(configuration.SnapshotOptions().conditionalSymbols.length = 3 And configuration.SnapshotOptions().conditionalSymbols[1] = "bmxng" And configuration.SnapshotOptions().conditionalSymbols[2] = "bmxng2", "intrinsic compiler symbols survive configured target-symbol replacement")
 Check(configuration.warnImplicitDefaultReturns And configuration.AnalysisOptions().controlFlow.reportImplicitDefaultReturns, "implicit default return warning is configurable")
+Check(configuration.AnalysisOptions().typeResolution.reportUnresolvedTypes, "LSP analyses report unresolved types")
 
 Local catalogueSdk:String = "/tmp/blitzmax-lsp-installed-catalogue-sdk"
 Local catalogueConfiguration:TLspWorkspaceConfiguration = configuration.Copy()
@@ -544,6 +545,39 @@ Local catalogueImplementationStore:TLspInstalledModuleCatalogueStore = New TLspI
 Local catalogueImplementationContext:TLspWorkspaceContext = TLspWorkspaceContext.Create("file:///catalogue-implementation", "catalogue implementation", catalogueImplementationConfiguration, catalogueDependencies, Null, catalogueImplementationStore)
 Check(TBlitzMaxLspCodeActions.UniqueModuleForValue(catalogueImplementationContext, "FileType") = "beta.second", "missing-import lookup treats overloads in one module as one exact match")
 Check(TBlitzMaxLspCodeActions.UniqueModuleForValue(catalogueImplementationContext, "SharedProbe") = "", "missing-import lookup declines an exact name exported by multiple modules")
+Check(TBlitzMaxLspCodeActions.UniqueModuleForType(catalogueImplementationContext, "TSecond") = "beta.second", "missing-import lookup finds a uniquely installed type")
+Local missingTypeDocument:TLspDocument = New TLspDocument
+missingTypeDocument.uri = "file:///catalogue-implementation/missing-type.bmx"
+missingTypeDocument.path = "/catalogue-implementation/missing-type.bmx"
+missingTypeDocument.text = "SuperStrict~nLocal sb:TSecond = New TSecond()"
+Local missingTypeAnalysis:TLanguageAnalysis = catalogueImplementationContext.Analyze(missingTypeDocument)
+Local missingTypeDeclarationDiagnostic:TDiagnostic
+Local missingTypeExpressionDiagnostic:TDiagnostic
+For Local missingTypeDiagnostic:TDiagnostic = EachIn missingTypeAnalysis.model.diagnostics
+	If missingTypeDiagnostic.code <> "BMX3100" Then Continue
+	If missingTypeDiagnostic.span.start = missingTypeDocument.text.Find("TSecond") Then
+		missingTypeDeclarationDiagnostic = missingTypeDiagnostic
+	Else If missingTypeDiagnostic.span.start = missingTypeDocument.text.Find("TSecond", missingTypeDocument.text.Find("TSecond") + 1) Then
+		missingTypeExpressionDiagnostic = missingTypeDiagnostic
+	End If
+Next
+Check(missingTypeDeclarationDiagnostic <> Null And missingTypeExpressionDiagnostic <> Null, "LSP analysis diagnoses unresolved declaration and New-expression types")
+Local requestedMissingType:TJSONObject = TBlitzMaxLspDiagnostics.ToLspDiagnostic(missingTypeDeclarationDiagnostic, missingTypeAnalysis.syntaxTree.source)
+Local requestedMissingTypes:TJSONArray = JsonArray()
+requestedMissingTypes.Append(requestedMissingType)
+Local missingTypeContext:TJSONObject = JsonObject()
+missingTypeContext.Set("diagnostics", requestedMissingTypes)
+Local missingTypeOnly:TJSONArray = JsonArray()
+missingTypeOnly.Append(New TJSONString.Create("quickfix"))
+missingTypeContext.Set("only", missingTypeOnly)
+Local missingTypeParams:TJSONObject = JsonObject()
+missingTypeParams.Set("context", missingTypeContext)
+missingTypeParams.Set("range", requestedMissingType.Get("range"))
+Local missingTypeActions:TJSONArray = TJSONArray(TBlitzMaxLspCodeActions.Query(missingTypeDocument, catalogueImplementationContext, missingTypeParams))
+Local missingTypeAction:TJSONObject = TJSONObject(missingTypeActions.Get(0))
+Local missingTypeEdits:TJSONArray = WorkspaceEditEdits(TJSONObject(missingTypeAction.Get("edit")), missingTypeDocument.uri)
+Check(missingTypeActions.Size() = 1 And missingTypeAction.GetString("title") = "Import beta.second" And missingTypeAction.GetBool("isPreferred"), "an unresolved installed type offers one preferred import quick fix")
+Check(missingTypeEdits.Size() = 1 And TJSONObject(missingTypeEdits.Get(0)).GetString("newText") = "~n~nImport beta.second", "the unresolved-type quick fix inserts the unique module import")
 Local catalogueImplementationDocument:TLspDocument = New TLspDocument
 catalogueImplementationDocument.uri = "file:///catalogue-implementation/main.bmx"
 catalogueImplementationDocument.path = "/catalogue-implementation/main.bmx"

@@ -25,6 +25,11 @@ Local model:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(parsed.syntaxTree
 Check(model.diagnostics.length = 2, "type-resolution diagnostic count")
 Check(FindDiagnostic(model.diagnostics, "BMX3100"), "unresolved type diagnostic")
 Check(FindDiagnostic(model.diagnostics, "BMX3102"), "generic arity diagnostic")
+Local unresolvedTypeDiagnostic:TDiagnostic
+For Local diagnostic:TDiagnostic = EachIn model.diagnostics
+	If diagnostic.code = "BMX3100" Then unresolvedTypeDiagnostic = diagnostic; Exit
+Next
+Check(unresolvedTypeDiagnostic.message.Contains("Type 'MissingType'") And unresolvedTypeDiagnostic.span.start = source.Find("MissingType") And unresolvedTypeDiagnostic.span.length = "MissingType".length, "unresolved named-type diagnostics exclude the declaration marker from their name and span")
 
 Check(model.BuiltinType("int") = model.BuiltinType("INT"), "canonical case-insensitive builtin")
 Check(model.BuiltinType("String").DisplayName() = "String", "builtin display name")
