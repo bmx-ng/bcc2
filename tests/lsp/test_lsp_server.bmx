@@ -1346,6 +1346,18 @@ pathCompletionDocument.text = "SuperStrict~nFramework brl.standardio~nImport brl
 firstContext.Analyze(pathCompletionDocument)
 Local pathMemberItems:TJSONArray = TJSONArray(TBlitzMaxLspCompletion.Query(pathCompletionDocument, firstContext, 4, 11))
 Check(FindCompletionItem(pathMemberItems, "Name") <> Null And FindCompletionItem(pathMemberItems, "Parent") <> Null, "BRL.Path member completion works inside a parenthesis-free Print call")
+Local pathTypeCompletionDocument:TLspDocument = New TLspDocument
+pathTypeCompletionDocument.uri = "file:///first/path-type-completion.bmx"
+pathTypeCompletionDocument.path = "/first/path-type-completion.bmx"
+pathTypeCompletionDocument.text = "SuperStrict~nFramework brl.standardio~nImport brl.path~nLocal path:TPath = TPath."
+Local pathTypeCompletionAnalysis:TLanguageAnalysis = firstContext.Analyze(pathTypeCompletionDocument)
+Local pathTypeCompletionOffset:Int = pathTypeCompletionDocument.text.length
+Local pathTypeCompletionResult:TMemberCompletionResult = TMemberCompletion.Query(pathTypeCompletionAnalysis.model, TSyntaxNavigator.Create(pathTypeCompletionAnalysis.syntaxTree), pathTypeCompletionOffset)
+Check(pathTypeCompletionResult <> Null And pathTypeCompletionResult.owner.name = "TPath" And pathTypeCompletionResult.isStatic, "import-aware member completion recognizes an imported Type receiver")
+Local pathTypeMemberItems:TJSONArray = TJSONArray(TBlitzMaxLspCompletion.Query(pathTypeCompletionDocument, firstContext, 3, 25))
+Local pathFromStringItem:TJSONObject = FindCompletionItem(pathTypeMemberItems, "FromString")
+Check(pathFromStringItem <> Null And pathFromStringItem.GetInteger("kind") = 3 And pathFromStringItem.GetString("detail").Contains("Function FromString:TPath(path:String)"), "imported Type completion includes its type Functions")
+Check(FindCompletionItem(pathTypeMemberItems, "Name") = Null And FindCompletionItem(pathTypeMemberItems, "New") = Null, "imported Type completion excludes instance Methods and constructors")
 Local selectionDocument:TLspDocument = New TLspDocument
 selectionDocument.uri = "file:///first/selection.bmx"
 selectionDocument.path = "/first/selection.bmx"
