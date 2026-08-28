@@ -2476,7 +2476,7 @@ Local lockedScreenPath:String = lockedDirectory + "/screen.bmx"
 Local lockedHelperPath:String = lockedDirectory + "/helper.bmx"
 Local lockedNestedPath:String = lockedDirectory + "/nested.bmx"
 Local lockedUnrelatedPath:String = lockedDirectory + "/unrelated.bmx"
-Local lockedMainSource:String = "SuperStrict~nImport ~qhelper.bmx~q~nInclude ~qscreen.bmx~q~nLocal rootValue:Int = HelperValue()"
+Local lockedMainSource:String = "SuperStrict~nImport ~qhelper.bmx~q~nImport ~qbulk0.bmx~q~nInclude ~qscreen.bmx~q~nLocal rootValue:Int = HelperValue()"
 Local lockedScreenSource:String = "Local screenValue:Int = HelperValue()"
 Local lockedHelperSource:String = "SuperStrict~nImport ~qnested.bmx~q~nFunction HelperValue:Int()~nReturn NestedValue()~nEnd Function"
 Local lockedNestedSource:String = "SuperStrict~nFunction NestedValue:Int()~nReturn 4~nEnd Function"
@@ -2486,6 +2486,13 @@ SaveText(lockedScreenSource, lockedScreenPath)
 SaveText(lockedHelperSource, lockedHelperPath)
 SaveText(lockedNestedSource, lockedNestedPath)
 SaveText(lockedUnrelatedSource, lockedUnrelatedPath)
+For Local lockedBulkIndex:Int = 0 Until 48
+	Local lockedBulkSource:String = "SuperStrict~n"
+	If lockedBulkIndex < 47 Then lockedBulkSource :+ "Import ~qbulk" + (lockedBulkIndex + 1) + ".bmx~q~n"
+	If lockedBulkIndex = 47 Then lockedBulkSource :+ "' HelperValue is deliberately mentioned in an unrelated source root.~n"
+	lockedBulkSource :+ "Function Bulk" + lockedBulkIndex + ":Int()~nReturn " + lockedBulkIndex + "~nEnd Function"
+	SaveText(lockedBulkSource, lockedDirectory + "/bulk" + lockedBulkIndex + ".bmx")
+Next
 Local lockedServer:TBlitzMaxLspServer = NewTestServer()
 lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:97,~qmethod~q:~qinitialize~q,~qparams~q:{~qworkspaceFolders~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qname~q:~qlocked-root~q}],~qinitializationOptions~q:{~qworkspaces~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qrootSourcePath~q:~q" + lockedMainPath + "~q}]}}}")
 responses = lockedServer.HandlePayload(DidOpenPayload("file://" + lockedScreenPath, lockedScreenSource))
@@ -2493,12 +2500,14 @@ Local lockedWorkspace:TLspWorkspaceContext = lockedServer.workspaces.Get("file:/
 Local lockedScreenAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath)
 Check(lockedWorkspace.configuration.rootSourcePath = lockedMainPath, "workspace receives the locked build root from initialization options")
 Check(lockedScreenAnalysis <> Null And lockedScreenAnalysis.snapshot.rootDocument.path = lockedMainPath, "opening a closed Include analyses it through the locked root")
-Check(lockedWorkspace.ProjectAnalysisCount() = 3, "locked project graph analyses the root and recursive quoted source imports")
+Check(lockedWorkspace.ProjectRootCount() = 51 And lockedWorkspace.ProjectAnalysisCount() = 1, "a broad locked project graph discovers recursive quoted imports without eagerly analysing them")
+Check(lockedWorkspace.ProjectCandidateRoots("HelperValue", lockedHelperPath).length = 2, "project candidates exclude source roots that cannot import the requested declaration")
 Local lockedImportedScope:TScope = lockedScreenAnalysis.model.ImportedScope("helper.bmx")
 Check(lockedImportedScope <> Null And lockedImportedScope.LookupLocal("HelperValue").length = 1, "locked root binds declarations from an imported source interface")
 responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:98,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedScreenPath + "~q},~qposition~q:{~qline~q:0,~qcharacter~q:26},~qcontext~q:{~qincludeDeclaration~q:true}}}")
 Local lockedReferences:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
-Check(lockedReferences.Size() = 3 And HasLocation(lockedReferences, "file://" + lockedHelperPath, 2, 9) And HasLocation(lockedReferences, "file://" + lockedMainPath, 3, 22) And HasLocation(lockedReferences, "file://" + lockedScreenPath, 0, 24), "references include closed locked-root and quoted-import source files")
+Check(lockedReferences.Size() = 3 And HasLocation(lockedReferences, "file://" + lockedHelperPath, 2, 9) And HasLocation(lockedReferences, "file://" + lockedMainPath, 4, 22) And HasLocation(lockedReferences, "file://" + lockedScreenPath, 0, 24), "references include closed locked-root and quoted-import source files")
+Check(lockedWorkspace.ProjectAnalysisCount() = 1, "references release transient analyses of closed source roots")
 Local lockedSymbols:TJSONArray = TJSONArray(TBlitzMaxLspWorkspaceSymbols.Query("HelperValue", lockedServer.workspaces, lockedServer.documents))
 Check(FindWorkspaceSymbol(lockedSymbols, "HelperValue", "/helper.bmx") <> Null And FindWorkspaceSymbol(lockedSymbols, "HelperValue", "/unrelated.bmx") = Null, "locked project symbols exclude unrelated workspace source files")
 Local lockedMainAnalysis:TLanguageAnalysis = TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath)))
@@ -2512,6 +2521,7 @@ responses = lockedServer.HandlePayload(DidOpenPayload("file://" + lockedHelperPa
 responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:99,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedHelperPath + "~q},~qposition~q:{~qline~q:3,~qcharacter~q:9},~qcontext~q:{~qincludeDeclaration~q:true}}}")
 lockedReferences = TJSONArray(ObjectFrom(responses[0]).Get("result"))
 Check(lockedReferences.Size() = 2 And HasLocation(lockedReferences, "file://" + lockedNestedPath, 1, 9) And HasLocation(lockedReferences, "file://" + lockedHelperPath, 3, 7), "references follow recursive quoted source imports in the locked graph")
+Check(lockedWorkspace.ProjectAnalysisCount() = 2, "a later reference request retains only the root and opened imported source")
 Local lockedOverlaySource:String = lockedHelperSource + "~nFunction OverlayValue:Int()~nReturn 8~nEnd Function~nFunction Unfinished:Int("
 responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedOverlaySource, 2))
 Local lockedHelperAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedHelperPath)
