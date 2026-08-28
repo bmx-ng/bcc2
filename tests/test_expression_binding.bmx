@@ -15,6 +15,19 @@ Function HasDiagnostic:Int(diagnostics:TDiagnostic[], code:String)
 	Return False
 End Function
 
+Local unresolvedExpressionOptions:TLanguageAnalysisOptions = TLanguageAnalysisOptions.Create()
+unresolvedExpressionOptions.typeResolution = New TTypeResolutionOptions
+unresolvedExpressionOptions.typeResolution.reportUnresolvedTypes = True
+Local unresolvedExpressionSource:String = "SuperStrict~nNew TExpressionOnlyMissing()"
+Local unresolvedExpressionAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(unresolvedExpressionSource, "unresolved-expression-type.bmx", unresolvedExpressionOptions)
+Local unresolvedExpressionCount:Int
+Local unresolvedExpressionDiagnostic:TDiagnostic
+For Local diagnostic:TDiagnostic = EachIn unresolvedExpressionAnalysis.model.diagnostics
+	If diagnostic.code = "BMX3100" Then unresolvedExpressionCount :+ 1; unresolvedExpressionDiagnostic = diagnostic
+Next
+Check(unresolvedExpressionCount = 1, "expression-only New types honour unresolved-type reporting")
+Check(unresolvedExpressionDiagnostic.path = "unresolved-expression-type.bmx" And unresolvedExpressionDiagnostic.span.start = unresolvedExpressionSource.Find("TExpressionOnlyMissing"), "expression type diagnostics retain their source location")
+
 Local rangeSyntaxParse:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nLocal selected:Range=1..^2~nLocal suffix:Range=(^2..)~nLocal all:Range=(..)", "range-expression-syntax.bmx")
 Check(rangeSyntaxParse.syntaxTree.diagnostics.length = 0, "Range expression forms parse without syntax diagnostics")
 Local selectedRangeDeclaration:TVariableDeclarationStatementSyntax = TVariableDeclarationStatementSyntax(rangeSyntaxParse.syntaxTree.root.members[1])
