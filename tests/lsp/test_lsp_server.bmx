@@ -475,8 +475,9 @@ Check(workspaceStore.ContextForPath("/workspace-other/file.bmx") = workspaceStor
 Local configuration:TLspWorkspaceConfiguration = TLspWorkspaceConfiguration.CreateDefault()
 Check(Not configuration.SnapshotOptions().parseConfiguredConditionals, "LSP snapshots retain every conditional source branch")
 configuration.sdkPath = TestSdkPath()
-configuration.ApplyJson(ObjectFrom("{~qbuildMode~q:~qdebug~q,~quseDependencySnapshots~q:false,~qwarnImplicitDefaultReturns~q:true,~qconditionalSymbols~q:[~qcustom~q]}"))
+configuration.ApplyJson(ObjectFrom("{~qbuildMode~q:~qdebug~q,~qrootSourcePath~q:~q/workspace/main.bmx~q,~quseDependencySnapshots~q:false,~qwarnImplicitDefaultReturns~q:true,~qconditionalSymbols~q:[~qcustom~q]}"))
 Check(configuration.buildMode = "debug" And Not configuration.useDependencySnapshots, "workspace configuration is applied")
+Check(configuration.rootSourcePath = "/workspace/main.bmx" And configuration.Copy().rootSourcePath = configuration.rootSourcePath, "locked root source configuration is retained by workspace copies")
 Check(configuration.conditionalSymbols.length = 1 And configuration.conditionalSymbols[0] = "custom", "configured conditional symbols replace defaults")
 Check(configuration.SnapshotOptions().conditionalSymbols.length = 3 And configuration.SnapshotOptions().conditionalSymbols[1] = "bmxng" And configuration.SnapshotOptions().conditionalSymbols[2] = "bmxng2", "intrinsic compiler symbols survive configured target-symbol replacement")
 Check(configuration.warnImplicitDefaultReturns And configuration.AnalysisOptions().controlFlow.reportImplicitDefaultReturns, "implicit default return warning is configurable")
@@ -2466,6 +2467,60 @@ responses = unitServer.HandlePayload(DidOpenPayload("file://" + unitStandalonePa
 Local unitStandaloneAnalysis:TLanguageAnalysis = unitWorkspace.LatestAnalysis("file://" + unitStandalonePath)
 Check(responses.length = 1 And unitWorkspace.CompilationRootForPath(unitStandalonePath) = "", "ordinary standalone files keep the original one-document analysis path")
 Check(unitStandaloneAnalysis.snapshot.documents.length = 1 And unitStandaloneAnalysis.syntaxTree.source.path = unitStandalonePath, "standalone compilation snapshot remains unchanged")
+
+Local lockedDirectory:String = "/tmp/blitzmax-lsp-locked-root-test"
+DeleteDir(lockedDirectory, True)
+CreateDir(lockedDirectory, True)
+Local lockedMainPath:String = lockedDirectory + "/main.bmx"
+Local lockedScreenPath:String = lockedDirectory + "/screen.bmx"
+Local lockedHelperPath:String = lockedDirectory + "/helper.bmx"
+Local lockedNestedPath:String = lockedDirectory + "/nested.bmx"
+Local lockedUnrelatedPath:String = lockedDirectory + "/unrelated.bmx"
+Local lockedMainSource:String = "SuperStrict~nImport ~qhelper.bmx~q~nInclude ~qscreen.bmx~q~nLocal rootValue:Int = HelperValue()"
+Local lockedScreenSource:String = "Local screenValue:Int = HelperValue()"
+Local lockedHelperSource:String = "SuperStrict~nImport ~qnested.bmx~q~nFunction HelperValue:Int()~nReturn NestedValue()~nEnd Function"
+Local lockedNestedSource:String = "SuperStrict~nFunction NestedValue:Int()~nReturn 4~nEnd Function"
+Local lockedUnrelatedSource:String = "SuperStrict~nFunction HelperValue:Int()~nReturn 99~nEnd Function"
+SaveText(lockedMainSource, lockedMainPath)
+SaveText(lockedScreenSource, lockedScreenPath)
+SaveText(lockedHelperSource, lockedHelperPath)
+SaveText(lockedNestedSource, lockedNestedPath)
+SaveText(lockedUnrelatedSource, lockedUnrelatedPath)
+Local lockedServer:TBlitzMaxLspServer = NewTestServer()
+lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:97,~qmethod~q:~qinitialize~q,~qparams~q:{~qworkspaceFolders~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qname~q:~qlocked-root~q}],~qinitializationOptions~q:{~qworkspaces~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qrootSourcePath~q:~q" + lockedMainPath + "~q}]}}}")
+responses = lockedServer.HandlePayload(DidOpenPayload("file://" + lockedScreenPath, lockedScreenSource))
+Local lockedWorkspace:TLspWorkspaceContext = lockedServer.workspaces.Get("file://" + lockedDirectory)
+Local lockedScreenAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath)
+Check(lockedWorkspace.configuration.rootSourcePath = lockedMainPath, "workspace receives the locked build root from initialization options")
+Check(lockedScreenAnalysis <> Null And lockedScreenAnalysis.snapshot.rootDocument.path = lockedMainPath, "opening a closed Include analyses it through the locked root")
+Check(lockedWorkspace.ProjectAnalysisCount() = 3, "locked project graph analyses the root and recursive quoted source imports")
+Local lockedImportedScope:TScope = lockedScreenAnalysis.model.ImportedScope("helper.bmx")
+Check(lockedImportedScope <> Null And lockedImportedScope.LookupLocal("HelperValue").length = 1, "locked root binds declarations from an imported source interface")
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:98,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedScreenPath + "~q},~qposition~q:{~qline~q:0,~qcharacter~q:26},~qcontext~q:{~qincludeDeclaration~q:true}}}")
+Local lockedReferences:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(lockedReferences.Size() = 3 And HasLocation(lockedReferences, "file://" + lockedHelperPath, 2, 9) And HasLocation(lockedReferences, "file://" + lockedMainPath, 3, 22) And HasLocation(lockedReferences, "file://" + lockedScreenPath, 0, 24), "references include closed locked-root and quoted-import source files")
+Local lockedSymbols:TJSONArray = TJSONArray(TBlitzMaxLspWorkspaceSymbols.Query("HelperValue", lockedServer.workspaces, lockedServer.documents))
+Check(FindWorkspaceSymbol(lockedSymbols, "HelperValue", "/helper.bmx") <> Null And FindWorkspaceSymbol(lockedSymbols, "HelperValue", "/unrelated.bmx") = Null, "locked project symbols exclude unrelated workspace source files")
+Local lockedMainAnalysis:TLanguageAnalysis = TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath)))
+lockedServer.HandlePayload(DidOpenPayload("file://" + lockedUnrelatedPath, lockedUnrelatedSource))
+Check(TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) = lockedMainAnalysis, "opening an unrelated workspace file does not rebuild the locked graph")
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:981,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedScreenPath + "~q},~qposition~q:{~qline~q:0,~qcharacter~q:26},~qcontext~q:{~qincludeDeclaration~q:true}}}")
+lockedReferences = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(lockedReferences.Size() = 3 And Not HasLocation(lockedReferences, "file://" + lockedUnrelatedPath, 1, 9), "an open unrelated same-named declaration remains outside locked-project references")
+lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didClose~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedUnrelatedPath + "~q}}}")
+responses = lockedServer.HandlePayload(DidOpenPayload("file://" + lockedHelperPath, lockedHelperSource))
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:99,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedHelperPath + "~q},~qposition~q:{~qline~q:3,~qcharacter~q:9},~qcontext~q:{~qincludeDeclaration~q:true}}}")
+lockedReferences = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(lockedReferences.Size() = 2 And HasLocation(lockedReferences, "file://" + lockedNestedPath, 1, 9) And HasLocation(lockedReferences, "file://" + lockedHelperPath, 3, 7), "references follow recursive quoted source imports in the locked graph")
+Local lockedOverlaySource:String = lockedHelperSource + "~nFunction OverlayValue:Int()~nReturn 8~nEnd Function~nFunction Unfinished:Int("
+responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedOverlaySource, 2))
+Local lockedHelperAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedHelperPath)
+Check(lockedHelperAnalysis.model.globalScope.LookupLocal("OverlayValue").length = 1, "locked project graph rebuilds from unsaved imported-source overlays")
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeConfiguration~q,~qparams~q:{~qsettings~q:{~qworkspaces~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qrootSourcePath~q:~q~q}]}}}")
+lockedScreenAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath)
+Check(lockedWorkspace.configuration.rootSourcePath = "" And lockedWorkspace.ProjectAnalysisCount() = 0, "unlocking clears the cached project graph")
+Check(lockedScreenAnalysis.snapshot.rootDocument.path = lockedScreenPath, "an open former Include returns to dynamic standalone-root analysis after unlock")
+DeleteDir(lockedDirectory, True)
 
 Local linkDirectory:String = "/tmp/blitzmax-lsp-document-link-test"
 DeleteDir(linkDirectory, True)
