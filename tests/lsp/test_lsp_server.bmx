@@ -2362,6 +2362,19 @@ Check(definitionResult <> Null And definitionResult.GetString("uri") = "file:///
 definitionRange = TJSONObject(definitionResult.Get("range"))
 definitionStart = TJSONObject(definitionRange.Get("start"))
 Check(definitionStart.GetInteger("line") = 2 And definitionStart.GetInteger("character") = 9, "cross-file definition selects the imported routine name")
+Local secondarySource:String = "SuperStrict~nImport ~qhelper.bmx~q~nLocal result:Int = LiveValue()"
+liveServer.HandlePayload(DidOpenPayload("file:///workspace/secondary.bmx", secondarySource))
+Local unrelatedSource:String = "SuperStrict~nFunction LiveValue:Int()~nReturn 99~nEnd Function~nLocal result:Int = LiveValue()"
+liveServer.HandlePayload(DidOpenPayload("file:///workspace/unrelated.bmx", unrelatedSource))
+responses = liveServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:37,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///workspace/main.bmx~q},~qposition~q:{~qline~q:2,~qcharacter~q:20},~qcontext~q:{~qincludeDeclaration~q:true}}}")
+Local loadedProjectReferences:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(loadedProjectReferences.Size() = 3 And HasLocation(loadedProjectReferences, "file:///workspace/helper.bmx", 2, 9) And HasLocation(loadedProjectReferences, "file:///workspace/main.bmx", 2, 19) And HasLocation(loadedProjectReferences, "file:///workspace/secondary.bmx", 2, 19), "references span loaded roots that bind the same imported source declaration")
+Check(Not HasLocation(loadedProjectReferences, "file:///workspace/unrelated.bmx", 1, 9) And Not HasLocation(loadedProjectReferences, "file:///workspace/unrelated.bmx", 4, 19), "same-named declarations in unrelated roots are not references")
+responses = liveServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:38,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///workspace/main.bmx~q},~qposition~q:{~qline~q:2,~qcharacter~q:20},~qcontext~q:{~qincludeDeclaration~q:false}}}")
+loadedProjectReferences = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(loadedProjectReferences.Size() = 2 And HasLocation(loadedProjectReferences, "file:///workspace/main.bmx", 2, 19) And HasLocation(loadedProjectReferences, "file:///workspace/secondary.bmx", 2, 19), "loaded-project references honour includeDeclaration=false")
+liveServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didClose~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///workspace/secondary.bmx~q}}}")
+liveServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didClose~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///workspace/unrelated.bmx~q}}}")
 
 responses = liveServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didChange~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///workspace/helper-part.bmx~q,~qversion~q:2},~qcontentChanges~q:[{~qtext~q:~qFunction UpdatedPart:Int()\nReturn 5\nEnd Function~q}]}}")
 Check(responses.length = 3, "changing transitive included dependency republishes all affected open documents")
