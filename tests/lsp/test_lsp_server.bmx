@@ -198,6 +198,17 @@ Function FindHierarchyItem:TJSONObject(items:TJSONArray, name:String)
 	Return Null
 End Function
 
+Function FindCallHierarchyEntry:TJSONObject(items:TJSONArray, direction:String, name:String)
+	If Not items Then Return Null
+	For Local index:Int = 0 Until items.Size()
+		Local entry:TJSONObject = TJSONObject(items.Get(index))
+		If Not entry Then Continue
+		Local item:TJSONObject = TJSONObject(entry.Get(direction))
+		If item And item.GetString("name").ToLower() = name.ToLower() Then Return entry
+	Next
+	Return Null
+End Function
+
 Function HasLocation:Int(items:TJSONArray, uri:String, line:Int, character:Int = -1)
 	If Not items Then Return False
 	For Local index:Int = 0 Until items.Size()
@@ -410,6 +421,10 @@ priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:909,~qmethod~q:~qtextDocument
 priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:910,~qmethod~q:~qtextDocument/hover~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/foreground.bmx~q},~qposition~q:{~qline~q:0,~qcharacter~q:0}}}")
 Check(priorityQueue.Dequeue().requestKey = "n:910", "foreground requests overtake automatic background feature requests")
 Check(priorityQueue.Dequeue().requestKey = "n:909", "overtaken background feature work remains queued")
+priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:912,~qmethod~q:~qtextDocument/semanticTokens/full~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/background.bmx~q}}}")
+priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:913,~qmethod~q:~qcallHierarchy/incomingCalls~q,~qparams~q:{~qitem~q:{}}}")
+Check(priorityQueue.Dequeue().requestKey = "n:913", "interactive call hierarchy expansion overtakes automatic background work")
+Check(priorityQueue.Dequeue().requestKey = "n:912", "call hierarchy prioritization preserves deferred background work")
 priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didOpen~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/ordered.bmx~q,~qlanguageId~q:~qblitzmax~q,~qversion~q:1,~qtext~q:~qSuperStrict~q}}}")
 priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:911,~qmethod~q:~qtextDocument/hover~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/foreground.bmx~q},~qposition~q:{~qline~q:0,~qcharacter~q:0}}}")
 Check(priorityQueue.Dequeue().methodName = "textDocument/didOpen", "foreground requests never cross pending document lifecycle updates")
@@ -1489,6 +1504,16 @@ Check(provenanceHoverContents.GetString("value").Contains("Compiler interface wr
 Local provenanceDefinition:TJSONObject = TJSONObject(TBlitzMaxLspNavigation.Definition(provenanceDocument, provenanceContext, store, 2, 16))
 Local provenanceDefinitionStart:TJSONObject = TJSONObject(TJSONObject(provenanceDefinition.Get("range")).Get("start"))
 Check(provenanceDefinition.GetString("uri").EndsWith("/mod/brl.mod/stream.mod/stream.bmx") And provenanceDefinitionStart.GetInteger("line") = 4 And provenanceDefinitionStart.GetInteger("character") = 5, "definition follows interface provenance to the source declaration name")
+Local importedCallDocument:TLspDocument = New TLspDocument
+importedCallDocument.uri = "file:///provenance/imported-call-hierarchy.bmx"
+importedCallDocument.path = "/provenance/imported-call-hierarchy.bmx"
+importedCallDocument.text = "SuperStrict~nImport BRL.Stream~nFunction Consume:Int(stream:TStreamWrapper)~nReturn stream.Read(1)~nEnd Function"
+provenanceContext.Analyze(importedCallDocument)
+Local importedCallItems:TJSONArray = TJSONArray(TBlitzMaxLspCallHierarchy.Prepare(importedCallDocument, provenanceContext, Null, 3, 15))
+Local importedReadCallItem:TJSONObject = FindHierarchyItem(importedCallItems, "Read")
+Local importedReadIncoming:TJSONArray = TJSONArray(TBlitzMaxLspCallHierarchy.Incoming(importedReadCallItem, provenanceContext, Null))
+Check(importedReadCallItem <> Null And importedReadCallItem.GetString("uri").EndsWith("/mod/brl.mod/stream.mod/stream.bmx") And FindCallHierarchyEntry(importedReadIncoming, "from", "Consume") <> Null, "imported module calls retain source provenance and their project caller")
+Check(TJSONArray(TBlitzMaxLspCallHierarchy.Outgoing(importedReadCallItem, provenanceContext, Null)).Size() = 0, "source-free compiler-interface routines do not invent outgoing implementation calls")
 Local provenanceCompletions:TJSONArray = TJSONArray(TBlitzMaxLspCompletion.Query(provenanceDocument, provenanceContext, 3, 8))
 Local provenanceReadCompletion:TJSONObject = FindCompletionItem(provenanceCompletions, "Read")
 Check(provenanceReadCompletion <> Null And provenanceReadCompletion.GetInteger("kind") = 2, "member completion is populated from the compiler interface catalogue")
@@ -1936,6 +1961,7 @@ Local capabilities:TJSONObject = TJSONObject(result.Get("capabilities"))
 Check(capabilities.Get("textDocumentSync") <> Null, "initialize advertises document sync")
 Check(capabilities.GetBool("hoverProvider"), "initialize advertises hover support")
 Check(capabilities.GetBool("typeHierarchyProvider"), "initialize advertises type hierarchy support")
+Check(capabilities.GetBool("callHierarchyProvider"), "initialize advertises call hierarchy support")
 Check(capabilities.Get("documentLinkProvider") <> Null, "initialize advertises document links")
 Check(capabilities.GetBool("referencesProvider"), "initialize advertises references")
 Local codeActionCapability:TJSONObject = TJSONObject(capabilities.Get("codeActionProvider"))
@@ -2342,6 +2368,45 @@ Local typeDefinitionResult:TJSONObject = TJSONObject(typeDefinitionResponse.Get(
 Local typeDefinitionStart:TJSONObject = TJSONObject(TJSONObject(typeDefinitionResult.Get("range")).Get("start"))
 Check(typeDefinitionResult.GetString("uri") = "file:///tmp/hierarchy.bmx" And typeDefinitionStart.GetInteger("line") = 3 And typeDefinitionStart.GetInteger("character") = 5, "textDocument/typeDefinition round-trips through JSON-RPC")
 
+Local callHierarchyServer:TBlitzMaxLspServer = NewTestServer()
+callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:65,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
+Local callHierarchyUri:String = "file:///tmp/call-hierarchy.bmx"
+Local callHierarchySource:String = "SuperStrict~nFunction Leaf:Int()~nReturn 1~nEnd Function~nFunction Start:Int()~nLeaf()~nReturn Leaf()~nEnd Function~nFunction Entry()~nStart()~nStart~nEnd Function~nInterface IWorker~nMethod Work:Int()~nEnd Interface~nFunction Dispatch:Int(worker:IWorker)~nReturn worker.Work()~nEnd Function~nType TBox<T>~nMethod New(value:T)~nEnd Method~nMethod Get:T()~nEnd Method~nEnd Type~nFunction Build:TBox<Int>()~nReturn New TBox<Int>(1)~nEnd Function~nFunction Read:Int(box:TBox<Int>)~nReturn box.Get()~nEnd Function~nFunction Invoke:Int(callback:Int())~nReturn callback()~nEnd Function"
+callHierarchyServer.HandlePayload(DidOpenPayload(callHierarchyUri, callHierarchySource))
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:66,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:4,~qcharacter~q:10}}}")
+Local startCallItems:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Local startCallItem:TJSONObject = FindHierarchyItem(startCallItems, "Start")
+Check(startCallItem <> Null And startCallItem.GetInteger("kind") = 12, "prepareCallHierarchy returns a source Function item")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:67,~qmethod~q:~qcallHierarchy/incomingCalls~q,~qparams~q:{~qitem~q:" + startCallItem.SaveString(JSON_COMPACT) + "}}")
+Local startIncoming:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Local entryIncoming:TJSONObject = FindCallHierarchyEntry(startIncoming, "from", "Entry")
+Check(startIncoming.Size() = 1 And entryIncoming <> Null And TJSONArray(entryIncoming.Get("fromRanges")).Size() = 2, "incoming calls group parenthesized and parenthesis-free calls by their containing Function")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:68,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + startCallItem.SaveString(JSON_COMPACT) + "}}")
+Local startOutgoing:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Local leafOutgoing:TJSONObject = FindCallHierarchyEntry(startOutgoing, "to", "Leaf")
+Check(startOutgoing.Size() = 1 And leafOutgoing <> Null And TJSONArray(leafOutgoing.Get("fromRanges")).Size() = 2, "outgoing calls group repeated calls to the same Function")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:681,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:6,~qcharacter~q:1}}}")
+Check(FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "Start") <> Null, "call hierarchy preparation resolves the containing routine from inside its body")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:69,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:13,~qcharacter~q:8}}}")
+Local workCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "Work")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:70,~qmethod~q:~qcallHierarchy/incomingCalls~q,~qparams~q:{~qitem~q:" + workCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(workCallItem.GetInteger("kind") = 6 And FindCallHierarchyEntry(TJSONArray(ObjectFrom(responses[0]).Get("result")), "from", "Dispatch") <> Null, "Interface dispatch appears as an incoming Method call")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:71,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:19,~qcharacter~q:8}}}")
+Local constructorCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "New")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:72,~qmethod~q:~qcallHierarchy/incomingCalls~q,~qparams~q:{~qitem~q:" + constructorCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(constructorCallItem.GetInteger("kind") = 9 And FindCallHierarchyEntry(TJSONArray(ObjectFrom(responses[0]).Get("result")), "from", "Build") <> Null, "constructed generic New expressions contribute constructor calls")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:73,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:21,~qcharacter~q:8}}}")
+Local genericMethodCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "Get")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:74,~qmethod~q:~qcallHierarchy/incomingCalls~q,~qparams~q:{~qitem~q:" + genericMethodCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(FindCallHierarchyEntry(TJSONArray(ObjectFrom(responses[0]).Get("result")), "from", "Read") <> Null, "constructed generic member calls retain their declaration identity")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:741,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:30,~qcharacter~q:10}}}")
+Local invokeCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "Invoke")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:742,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + invokeCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(TJSONArray(ObjectFrom(responses[0]).Get("result")).Size() = 0, "calls through structural function pointers do not invent a static destination")
+callHierarchyServer.HandlePayload(DidChangePayload(callHierarchyUri, callHierarchySource + "~nFunction Broken()~nStart(", 2))
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:75,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:34,~qcharacter~q:2}}}")
+Check(responses.length = 1, "call hierarchy preparation tolerates an incomplete live call")
+
 Local completionServer:TBlitzMaxLspServer = NewTestServer()
 completionServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:40,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
 completionServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didOpen~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/completion.bmx~q,~qlanguageId~q:~qblitzmax~q,~qversion~q:1,~qtext~q:~qSuperStrict\nType TBase\nField inherited:Int\nMethod BaseMethod:Int()\nEnd Method\nEnd Type\nType TOverload Extends TBase\nMethod New(amount:Int)\nEnd Method\nField value:Int\nMethod Calc:Int(amount:Int)\nEnd Method\nMethod Calc:Int(left:Int, right:Int)\nEnd Method\nFunction Create:TOverload()\nEnd Function\nEnd Type\nLocal t := New TOverload(1)\nt.\nTOverload.\nt.Ca\nPrint t.\nFunction UseKey(key:Int)\nEnd Function\nUseKey(t.)\nGlobal GameKeys:TGameKeys = New TGameKeys\nType TGameKeys\nField one:Int\nField two:Int\nEnd Type\nUseKey(GameKeys.)~q}}}")
@@ -2595,6 +2660,15 @@ Check(unitMiddleReferences.Size() = 2 And HasLocation(unitMiddleReferences, "fil
 responses = unitServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:94,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + unitLeafPath + "~q},~qposition~q:{~qline~q:1,~qcharacter~q:8},~qcontext~q:{~qincludeDeclaration~q:false}}}")
 unitRootReferences = TJSONArray(ObjectFrom(responses[0]).Get("result"))
 Check(unitRootReferences.Size() = 1 And HasLocation(unitRootReferences, "file://" + unitLeafPath, 1, 7), "compilation-unit references honour includeDeclaration=false across files")
+responses = unitServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:941,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + unitRootPath + "~q},~qposition~q:{~qline~q:1,~qcharacter~q:12}}}")
+Local includedRootCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "RootValue")
+responses = unitServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:942,~qmethod~q:~qcallHierarchy/incomingCalls~q,~qparams~q:{~qitem~q:" + includedRootCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(FindCallHierarchyEntry(TJSONArray(ObjectFrom(responses[0]).Get("result")), "from", "LeafValue") <> Null, "incoming calls cross recursive Include documents in the loaded compilation unit")
+responses = unitServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:943,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + unitLeafPath + "~q},~qposition~q:{~qline~q:0,~qcharacter~q:12}}}")
+Local includedLeafCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "LeafValue")
+responses = unitServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:944,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + includedLeafCallItem.SaveString(JSON_COMPACT) + "}}")
+Local includedLeafOutgoing:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
+Check(FindCallHierarchyEntry(includedLeafOutgoing, "to", "RootValue") <> Null And FindCallHierarchyEntry(includedLeafOutgoing, "to", "MiddleValue") <> Null, "outgoing calls cross unopened source files in a recursive Include graph")
 Local unitUpdatedLeafSource:String = "Function UpdatedLeaf:Int()~nReturn RootValue() + MiddleValue()~nEnd Function"
 responses = unitServer.HandlePayload(DidChangePayload("file://" + unitLeafPath, unitUpdatedLeafSource, 2))
 unitLeafAnalysis = unitWorkspace.LatestAnalysis("file://" + unitLeafPath)
