@@ -3435,9 +3435,18 @@ Check(markerInterface.Succeeded(), "method-free marker Interfaces retain a valid
 Local markerDiagnostics:TCompilerDiagnostic[]
 Local markerC:String = TBlitzMaxCompiler.EmitRuntimeC(markerInterface, markerDiagnostics)
 Check(markerDiagnostics.length = 0 And Contains(markerC, "void *reserved;") And Contains(markerC, "{ 0 },"), "marker Interface tables remain valid standard C structs and initializers")
+resolver.AddInterface("acme.required", "sdk/acme.required.i", "superstrict~nIRequired^Null{~n-Value:Int()=~qacme_required_IRequired_Value~q~n}AI=~qacme_required_IRequired~q")
+Local importedRequired:TCompilerResult = TBlitzMaxCompiler.Compile("imported-required.bmx", "SuperStrict~nImport acme.required~nType TIncomplete Implements IRequired~nEnd Type", resolver, TestOptions())
+Local importedIncomplete:TSymbol = importedRequired.analysis.model.globalScope.LookupLocal("TIncomplete")[0]
+Check(importedRequired.Succeeded() And importedRequired.analysis.model.IsAbstractType(importedIncomplete) And importedRequired.analysis.model.AbstractObligations(importedIncomplete).length = 1 And importedRequired.ir.classes[0].isAbstract, "bodyless methods from an imported Interface remain abstract obligations without a compact A flag: " + CompilerDiagnosticSummary(importedRequired))
+Local instantiatedImportedRequired:TCompilerResult = TBlitzMaxCompiler.Compile("instantiated-imported-required.bmx", "SuperStrict~nImport acme.required~nType TIncomplete Implements IRequired~nEnd Type~nLocal value:TIncomplete=New TIncomplete", resolver, TestOptions())
+Check(Not instantiatedImportedRequired.Succeeded() And HasLanguageDiagnostic(instantiatedImportedRequired, "BMX3316"), "an imported Interface obligation prevents instantiating an incomplete Type")
 
-Local genericInterface:TCompilerResult = TBlitzMaxCompiler.Compile("generic-interface.bmx", "SuperStrict~nInterface IValue<T>~nMethod Get:T()~nEnd Interface", resolver, TestOptions())
+Local genericInterface:TCompilerResult = TBlitzMaxCompiler.Compile("/sdk/mod/acme.mod/genericinterface.mod/genericinterface.bmx", "SuperStrict~nModule acme.genericinterface~nInterface IValue<T>~nMethod Get:T()~nEnd Interface", resolver, TestOptions())
 Check(genericInterface.Succeeded() And genericInterface.genericPlan.templateOutputs.length = 1 And genericInterface.genericPlan.units.length = 0, "an open generic Interface publishes a canonical template without taking runtime ownership until a closed specialization is requested")
+Local genericInterfacePublicationDiagnostics:TCompilerDiagnostic[]
+Local genericInterfacePublication:String = TBlitzMaxCompiler.EmitInterface(genericInterface, genericInterfacePublicationDiagnostics)
+Check(genericInterfacePublicationDiagnostics.length = 0 And Contains(genericInterfacePublication, "IValue<T>^Object{ '@source ~q/sdk/mod/acme.mod/genericinterface.mod/genericinterface.bmx~q,3,0") And Contains(genericInterfacePublication, "-Get:T() '@source ~q/sdk/mod/acme.mod/genericinterface.mod/genericinterface.bmx~q,4,0"), "generic compact Interfaces publish declaration and member source provenance")
 Local objectGenericSource:String = "SuperStrict~nType TArgumentBox<T>~nField value:T~nEnd Type~nLocal objects:TArgumentBox<Object>=New TArgumentBox<Object>"
 Local objectGeneric:TCompilerResult = TBlitzMaxCompiler.Compile("object-generic.bmx", objectGenericSource, resolver, TestOptions())
 Check(objectGeneric.Succeeded() And objectGeneric.genericPlan.registry.nodes.length = 1 And Not HasCompilerDiagnostic(objectGeneric, "BMXC3040"), "Object generic arguments receive a stable specialization identity and lower completely")
