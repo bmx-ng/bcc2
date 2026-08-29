@@ -2484,16 +2484,19 @@ Local lockedScreenPath:String = lockedDirectory + "/screen.bmx"
 Local lockedHelperPath:String = lockedDirectory + "/helper.bmx"
 Local lockedNestedPath:String = lockedDirectory + "/nested.bmx"
 Local lockedUnrelatedPath:String = lockedDirectory + "/unrelated.bmx"
+Local lockedAddedPath:String = lockedDirectory + "/added.bmx"
 Local lockedMainSource:String = "SuperStrict~nImport ~qhelper.bmx~q~nImport ~qbulk0.bmx~q~nInclude ~qscreen.bmx~q~nLocal rootValue:Int = HelperValue()"
 Local lockedScreenSource:String = "Local screenValue:Int = HelperValue()"
 Local lockedHelperSource:String = "SuperStrict~nImport ~qnested.bmx~q~nFunction HelperValue:Int()~nReturn NestedValue()~nEnd Function"
 Local lockedNestedSource:String = "SuperStrict~nFunction NestedValue:Int()~nReturn 4~nEnd Function"
 Local lockedUnrelatedSource:String = "SuperStrict~nFunction HelperValue:Int()~nReturn 99~nEnd Function"
+Local lockedAddedSource:String = "SuperStrict~nFunction AddedValue:Int()~nReturn 7~nEnd Function"
 SaveText(lockedMainSource, lockedMainPath)
 SaveText(lockedScreenSource, lockedScreenPath)
 SaveText(lockedHelperSource, lockedHelperPath)
 SaveText(lockedNestedSource, lockedNestedPath)
 SaveText(lockedUnrelatedSource, lockedUnrelatedPath)
+SaveText(lockedAddedSource, lockedAddedPath)
 For Local lockedBulkIndex:Int = 0 Until 48
 	Local lockedBulkSource:String = "SuperStrict~n"
 	If lockedBulkIndex < 47 Then lockedBulkSource :+ "Import ~qbulk" + (lockedBulkIndex + 1) + ".bmx~q~n"
@@ -2509,6 +2512,7 @@ Local lockedScreenAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("f
 Check(lockedWorkspace.configuration.rootSourcePath = lockedMainPath, "workspace receives the locked build root from initialization options")
 Check(lockedScreenAnalysis <> Null And lockedScreenAnalysis.snapshot.rootDocument.path = lockedMainPath, "opening a closed Include analyses it through the locked root")
 Check(lockedWorkspace.ProjectRootCount() = 51 And lockedWorkspace.ProjectAnalysisCount() = 1, "a broad locked project graph discovers recursive quoted imports without eagerly analysing them")
+Check(lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedMainPath)) And lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedHelperPath)), "project discovery publishes reusable source interfaces for retained analyses")
 Check(lockedWorkspace.ProjectCandidateRoots("HelperValue", lockedHelperPath).length = 2, "project candidates exclude source roots that cannot import the requested declaration")
 Local lockedImportedScope:TScope = lockedScreenAnalysis.model.ImportedScope("helper.bmx")
 Check(lockedImportedScope <> Null And lockedImportedScope.LookupLocal("HelperValue").length = 1, "locked root binds declarations from an imported source interface")
@@ -2530,10 +2534,21 @@ responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:99,~qmethod~
 lockedReferences = TJSONArray(ObjectFrom(responses[0]).Get("result"))
 Check(lockedReferences.Size() = 2 And HasLocation(lockedReferences, "file://" + lockedNestedPath, 1, 9) And HasLocation(lockedReferences, "file://" + lockedHelperPath, 3, 7), "references follow recursive quoted source imports in the locked graph")
 Check(lockedWorkspace.ProjectAnalysisCount() = 2, "a later reference request retains only the root and opened imported source")
+Local lockedOriginalHelperAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedHelperPath)
+Local lockedBodySource:String = "SuperStrict~nImport ~qnested.bmx~q~nFunction HelperValue:Int()~nReturn NestedValue() + 1~nEnd Function"
+responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedBodySource, 2))
+Local lockedBodyHelperAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedHelperPath)
+Check(lockedWorkspace.ProjectRootCount() = 51 And TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) = lockedMainAnalysis, "a routine-body edit retains the discovered graph and importing root analysis")
+Check(lockedBodyHelperAnalysis <> lockedOriginalHelperAnalysis, "a routine-body edit rebuilds the changed source root analysis")
 Local lockedOverlaySource:String = lockedHelperSource + "~nFunction OverlayValue:Int()~nReturn 8~nEnd Function~nFunction Unfinished:Int("
-responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedOverlaySource, 2))
+responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedOverlaySource, 3))
 Local lockedHelperAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedHelperPath)
 Check(lockedHelperAnalysis.model.globalScope.LookupLocal("OverlayValue").length = 1, "locked project graph rebuilds from unsaved imported-source overlays")
+Local lockedUpdatedMainAnalysis:TLanguageAnalysis = TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath)))
+Check(lockedUpdatedMainAnalysis <> Null And lockedUpdatedMainAnalysis <> lockedMainAnalysis And lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath) <> Null, "a public declaration edit invalidates, republishes and rebuilds importing root analyses")
+Local lockedTopologySource:String = lockedOverlaySource.Replace("Import ~qnested.bmx~q", "Import ~qnested.bmx~q~nImport ~qadded.bmx~q")
+responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedTopologySource, 4))
+Check(lockedWorkspace.ProjectRootCount() = 52 And TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) <> lockedUpdatedMainAnalysis, "a quoted-source topology edit rediscovers the project graph and rebuilds its locked root")
 responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeConfiguration~q,~qparams~q:{~qsettings~q:{~qworkspaces~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qrootSourcePath~q:~q~q}]}}}")
 lockedScreenAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath)
 Check(lockedWorkspace.configuration.rootSourcePath = "" And lockedWorkspace.ProjectAnalysisCount() = 0, "unlocking clears the cached project graph")
