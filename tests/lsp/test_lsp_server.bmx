@@ -347,6 +347,15 @@ Function CodeActionsAt:TJSONArray(server:TBlitzMaxLspServer, id:Int, uri:String,
 	Return TJSONArray(ObjectFrom(responses[0]).Get("result"))
 End Function
 
+Function FindCodeAction:TJSONObject(actions:TJSONArray, kind:String)
+	If Not actions Then Return Null
+	For Local index:Int = 0 Until actions.Size()
+		Local action:TJSONObject = TJSONObject(actions.Get(index))
+		If action And action.GetString("kind") = kind Then Return action
+	Next
+	Return Null
+End Function
+
 Function AllEditsUseName:Int(edits:TJSONArray, name:String)
 	If Not edits Or edits.Size() = 0 Then Return False
 	For Local index:Int = 0 Until edits.Size()
@@ -2083,6 +2092,52 @@ Check(strictSnippet.Contains("returns:"), "Strict routines with an implicit Int 
 Local inlineBBDocUri:String = "file:///tmp/inline-bbdoc.bmx"
 bbdocServer.HandlePayload(DidOpenPayload(inlineBBDocUri, "SuperStrict~nFunction Inline:Int() Return 1 End Function"))
 Check(CodeActionsAt(bbdocServer, 112, inlineBBDocUri, 1, 5).Size() = 1 And CodeActionsAt(bbdocServer, 113, inlineBBDocUri, 1, 27).Size() = 0, "same-line routine bodies do not count as declaration headers")
+
+Local implementUri:String = "file:///tmp/implement-members.bmx"
+Local implementSource:String = "SuperStrict~nInterface IMarker~nEnd Interface~nStruct SPoint~nEnd Struct~nType TBox<T>~nEnd Type~nInterface ITransform<T>~nMethod Apply:T(value:T, text:String, values:Int[], objectValue:Object, interfaceValue:IMarker, structValue:SPoint, callback:Closure<T(input:T)>)~nMethod Nested:TBox<T>(value:TBox<T>)~nEnd Interface~nType TAbstractBase<T> Abstract~nMethod Required:T(value:T Var) Abstract~nEnd Type~nType TWorker Extends TAbstractBase<String> Implements ITransform<Int>~nEnd Type"
+bbdocServer.HandlePayload(DidOpenPayload(implementUri, implementSource, 4))
+Local implementActions:TJSONArray = CodeActionsAt(bbdocServer, 114, implementUri, 14, 7, "refactor.rewrite.implement")
+Check(implementActions.Size() = 1, "a Type with inherited abstract obligations offers one missing-member refactoring")
+Local implementAction:TJSONObject = FindCodeAction(implementActions, "refactor.rewrite.implement")
+Check(implementAction <> Null And implementAction.GetString("title") = "Implement 3 missing members in TWorker", "missing-member generation reports the concrete Type and obligation count")
+Local implementDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(implementAction.Get("edit")))
+Local implementIdentifier:TJSONObject = TJSONObject(implementDocumentEdit.Get("textDocument"))
+Local implementEdits:TJSONArray = TJSONArray(implementDocumentEdit.Get("edits"))
+Local implementSnippetEdit:TJSONObject = TJSONObject(implementEdits.Get(0))
+Local implementSnippet:String = TJSONObject(implementSnippetEdit.Get("snippet")).GetString("value")
+Check(implementIdentifier.GetString("uri") = implementUri And implementIdentifier.GetInteger("version") = 4 And implementEdits.Size() = 1, "missing members use one versioned insertion edit")
+Check(implementSnippet.Contains("Method Required:String(value:String Var)") And implementSnippet.Contains("Method Apply:Int(value:Int, text:String, values:Int[], objectValue:Object, interfaceValue:IMarker, structValue:SPoint, callback:Closure<Int(input:Int)>)"), "generated stubs substitute inherited generic scalar, String, Array, Object, Interface, Struct, Closure and Var parameter types")
+Check(implementSnippet.Contains("Method Nested:TBox<Int>(value:TBox<Int>)") And implementSnippet.Contains("Throw ~q${1:Not implemented}~q") And implementSnippet.EndsWith("$0"), "generated stubs preserve nested constructed types and expose editable method bodies")
+Local implementInsertStart:TJSONObject = TJSONObject(TJSONObject(implementSnippetEdit.Get("range")).Get("start"))
+Check(implementInsertStart.GetInteger("line") = 15 And implementInsertStart.GetInteger("character") = 0, "missing members insert immediately before the Type terminator")
+Check(CodeActionsAt(bbdocServer, 115, implementUri, 8, 8, "refactor.rewrite.implement").Size() = 0, "Interfaces themselves do not receive implementation stubs")
+
+Local plainImplementDocument:TLspDocument = New TLspDocument
+plainImplementDocument.uri = implementUri
+plainImplementDocument.path = "/tmp/implement-members.bmx"
+plainImplementDocument.text = implementSource
+plainImplementDocument.version = 4
+Local plainImplementParams:TJSONObject = JsonObject()
+plainImplementParams.Set("range", PointRange(14, 7))
+Local plainImplementContext:TJSONObject = JsonObject()
+Local plainImplementOnly:TJSONArray = JsonArray()
+plainImplementOnly.Append(New TJSONString.Create("refactor.rewrite.implement"))
+plainImplementContext.Set("only", plainImplementOnly)
+plainImplementContext.Set("diagnostics", JsonArray())
+plainImplementParams.Set("context", plainImplementContext)
+Local plainImplementActions:TJSONArray = TJSONArray(TBlitzMaxLspCodeActions.Query(plainImplementDocument, bbdocServer.workspaces.adHoc, plainImplementParams, False))
+Local plainImplementDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(plainImplementActions.Get(0)).Get("edit")))
+Local plainImplementEdit:TJSONObject = TJSONObject(TJSONArray(plainImplementDocumentEdit.Get("edits")).Get(0))
+Local plainImplementText:String = plainImplementEdit.GetString("newText")
+Local plainInsertionOffset:Int = implementSource.Find("End Type", implementSource.Find("Type TWorker"))
+Local implementedSource:String = implementSource[..plainInsertionOffset] + plainImplementText + implementSource[plainInsertionOffset..]
+Local implementedAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(implementedSource, "/tmp/implemented-members.bmx")
+Local implementedWorker:TSymbol = implementedAnalysis.model.globalScope.LookupLocal("TWorker")[0]
+Check(Not implementedAnalysis.model.IsAbstractType(implementedWorker) And implementedAnalysis.model.AbstractObligations(implementedWorker).length = 0, "plain-text fallback generates semantically complete member implementations")
+
+Local completeImplementUri:String = "file:///tmp/complete-members.bmx"
+bbdocServer.HandlePayload(DidOpenPayload(completeImplementUri, "SuperStrict~nInterface IDone~nMethod Run:Int()~nEnd Interface~nType TDone Implements IDone~nMethod Run:Int()~nReturn 1~nEnd Method~nEnd Type"))
+Check(CodeActionsAt(bbdocServer, 116, completeImplementUri, 4, 7, "refactor.rewrite.implement").Size() = 0, "a complete Type does not offer a redundant missing-member action")
 
 Local plainBBDocUri:String = "file:///tmp/plain-bbdoc.bmx"
 codeActionServer.HandlePayload(DidOpenPayload(plainBBDocUri, "SuperStrict~nFunction Legacy:Int(value:Int)~nReturn value~nEnd Function", 3))
