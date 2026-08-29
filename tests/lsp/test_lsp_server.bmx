@@ -2381,10 +2381,18 @@ responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:67,~q
 Local startIncoming:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
 Local entryIncoming:TJSONObject = FindCallHierarchyEntry(startIncoming, "from", "Entry")
 Check(startIncoming.Size() = 1 And entryIncoming <> Null And TJSONArray(entryIncoming.Get("fromRanges")).Size() = 2, "incoming calls group parenthesized and parenthesis-free calls by their containing Function")
+Local callHierarchyContext:TLspWorkspaceContext = callHierarchyServer.workspaces.adHoc
+Local initialCallIndexBuilds:Int = callHierarchyContext.callHierarchyIndexBuilds
+Local initialCallIndexHits:Int = callHierarchyContext.callHierarchyIndexHits
+Check(initialCallIndexBuilds = 1 And callHierarchyContext.callHierarchyIndexedEdges = 2, "first call hierarchy expansion indexes only calls to the requested routine")
 responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:68,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + startCallItem.SaveString(JSON_COMPACT) + "}}")
 Local startOutgoing:TJSONArray = TJSONArray(ObjectFrom(responses[0]).Get("result"))
 Local leafOutgoing:TJSONObject = FindCallHierarchyEntry(startOutgoing, "to", "Leaf")
 Check(startOutgoing.Size() = 1 And leafOutgoing <> Null And TJSONArray(leafOutgoing.Get("fromRanges")).Size() = 2, "outgoing calls group repeated calls to the same Function")
+Local outgoingCallIndexBuilds:Int = callHierarchyContext.callHierarchyIndexBuilds
+Check(outgoingCallIndexBuilds = initialCallIndexBuilds + 1, "outgoing hierarchy builds only the requested caller index")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:682,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + startCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(callHierarchyContext.callHierarchyIndexBuilds = outgoingCallIndexBuilds And callHierarchyContext.callHierarchyIndexHits > initialCallIndexHits, "repeated call hierarchy expansions reuse the targeted semantic-root index")
 responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:681,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:6,~qcharacter~q:1}}}")
 Check(FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "Start") <> Null, "call hierarchy preparation resolves the containing routine from inside its body")
 responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:69,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:13,~qcharacter~q:8}}}")
@@ -2403,9 +2411,12 @@ responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:741,~
 Local invokeCallItem:TJSONObject = FindHierarchyItem(TJSONArray(ObjectFrom(responses[0]).Get("result")), "Invoke")
 responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:742,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + invokeCallItem.SaveString(JSON_COMPACT) + "}}")
 Check(TJSONArray(ObjectFrom(responses[0]).Get("result")).Size() = 0, "calls through structural function pointers do not invent a static destination")
+Local callIndexBuildsBeforeChange:Int = callHierarchyContext.callHierarchyIndexBuilds
 callHierarchyServer.HandlePayload(DidChangePayload(callHierarchyUri, callHierarchySource + "~nFunction Broken()~nStart(", 2))
 responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:75,~qmethod~q:~qtextDocument/prepareCallHierarchy~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + callHierarchyUri + "~q},~qposition~q:{~qline~q:34,~qcharacter~q:2}}}")
 Check(responses.length = 1, "call hierarchy preparation tolerates an incomplete live call")
+responses = callHierarchyServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:751,~qmethod~q:~qcallHierarchy/outgoingCalls~q,~qparams~q:{~qitem~q:" + startCallItem.SaveString(JSON_COMPACT) + "}}")
+Check(callHierarchyContext.callHierarchyIndexBuilds = callIndexBuildsBeforeChange + 1, "document changes invalidate and lazily rebuild the call hierarchy index")
 
 Local completionServer:TBlitzMaxLspServer = NewTestServer()
 completionServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:40,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
@@ -2737,6 +2748,7 @@ Check(lockedProgress.AcceptResponse(lockedProgressResponse), "the server consume
 Check(lockedWorkspace.ProjectRootCount() = 51 And lockedWorkspace.ProjectAnalysisCount() = 1, "a broad locked project graph discovers recursive quoted imports without eagerly analysing them")
 Check(lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedMainPath)) And lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedHelperPath)), "project discovery publishes reusable source interfaces for retained analyses")
 Check(lockedWorkspace.ProjectCandidateRoots("HelperValue", lockedHelperPath).length = 2, "project candidates exclude source roots that cannot import the requested declaration")
+Check(lockedWorkspace.ProjectCallCandidateRoots("HelperValue", lockedHelperPath).length = 1, "incoming-call candidates exclude declarations and comment-only name matches")
 Check(lockedProgress.emitted.length = 5, "cached project queries do not emit redundant progress notifications")
 Local lockedReachabilityEntries:Int
 For Local value:Object = EachIn lockedWorkspace.projectReachability.Values()
