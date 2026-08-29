@@ -376,7 +376,7 @@ Check(framingHeaderEnd >= 4 And PeekByte(framingBank, framingHeaderEnd - 4) = 13
 framingStream.Seek(0)
 Check(framingTransport.ReadMessage() = unicodePayload, "transport uses UTF-8 byte content length")
 
-Local messageQueue:TLspMessageQueue = New TLspMessageQueue(0)
+Local messageQueue:TLspMessageQueue = New TLspMessageQueue(0, 0)
 messageQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didChange~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/queued.bmx~q,~qversion~q:2},~qcontentChanges~q:[{~qtext~q:~qversion two~q}]}}")
 messageQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:901,~qmethod~q:~qtextDocument/hover~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/queued.bmx~q},~qposition~q:{~qline~q:0,~qcharacter~q:0}}}")
 messageQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didChange~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/queued.bmx~q,~qversion~q:5},~qcontentChanges~q:[{~qtext~q:~qversion five~q}]}}")
@@ -386,7 +386,17 @@ Check(queuedChange.documentVersion = 5 And queuedChange.payload.Contains("versio
 Local queuedHover:TLspQueuedMessage = messageQueue.Dequeue()
 Check(queuedHover.requestKey = "n:901", "non-change requests retain their queue position")
 
-Local priorityQueue:TLspMessageQueue = New TLspMessageQueue(0)
+Local watchedQueue:TLspMessageQueue = New TLspMessageQueue(0, 0)
+watchedQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile:///tmp/first.bmx~q,~qtype~q:1}]}}")
+watchedQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile:///tmp/second.bmx~q,~qtype~q:2},{~quri~q:~qfile:///tmp/first.bmx~q,~qtype~q:2}]}}")
+Check(watchedQueue.PendingCount() = 1, "adjacent watched-file notifications coalesce inside one debounce generation")
+Local watchedMessage:TLspQueuedMessage = watchedQueue.Dequeue()
+Local watchedRequest:TJSONObject = ObjectFrom(watchedMessage.payload)
+Local watchedChanges:TJSONArray = TJSONArray(TJSONObject(watchedRequest.Get("params")).Get("changes"))
+Check(watchedChanges.Size() = 2 And TJSONObject(watchedChanges.Get(0)).GetString("uri").EndsWith("first.bmx") And TJSONObject(watchedChanges.Get(0)).GetInteger("type") = 2, "watched-file coalescing retains distinct paths and the latest event for duplicates")
+watchedQueue.Close()
+
+Local priorityQueue:TLspMessageQueue = New TLspMessageQueue(0, 0)
 priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:909,~qmethod~q:~qtextDocument/semanticTokens/full~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/background.bmx~q}}}")
 priorityQueue.Enqueue("{~qjsonrpc~q:~q2.0~q,~qid~q:910,~qmethod~q:~qtextDocument/hover~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/foreground.bmx~q},~qposition~q:{~qline~q:0,~qcharacter~q:0}}}")
 Check(priorityQueue.Dequeue().requestKey = "n:910", "foreground requests overtake automatic background feature requests")
@@ -2127,6 +2137,27 @@ Check(server.workspaces.adHoc.LatestAnalysis("file:///tmp/test.bmx").snapshot = 
 previousGeneration = server.workspaces.dependencyCache.generation
 responses = server.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile:///sdk/module.i~q,~qtype~q:2}]}}")
 Check(responses.length = 0 And server.workspaces.dependencyCache.generation = previousGeneration + 1, "an unrelated watched dependency invalidates its cache entry without republishing open documents")
+
+Local saveEchoDirectory:String = "/tmp/blitzmax-lsp-save-echo-test"
+DeleteDir(saveEchoDirectory, True)
+CreateDir(saveEchoDirectory, True)
+Local saveEchoPath:String = saveEchoDirectory + "/main.bmx"
+Local saveEchoUri:String = "file://" + saveEchoPath
+Local saveEchoOriginal:String = "SuperStrict~nLocal value:Int = 1"
+Local saveEchoChanged:String = "SuperStrict~nLocal value:Int = 2"
+SaveText(saveEchoOriginal, saveEchoPath)
+Local saveEchoServer:TBlitzMaxLspServer = NewTestServer()
+saveEchoServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:881,~qmethod~q:~qinitialize~q,~qparams~q:{~qworkspaceFolders~q:[{~quri~q:~qfile://" + saveEchoDirectory + "~q,~qname~q:~qsave-echo~q}],~qinitializationOptions~q:{~qblitzmax~q:{~quseDependencySnapshots~q:false}}}}")
+saveEchoServer.HandlePayload(DidOpenPayload(saveEchoUri, saveEchoOriginal))
+responses = saveEchoServer.HandlePayload(DidChangePayload(saveEchoUri, saveEchoChanged, 2))
+Local saveEchoDocument:TLspDocument = saveEchoServer.documents.Get(saveEchoUri)
+Check(responses.length = 1 And saveEchoDocument.analyzedVersion = 2 And saveEchoDocument.liveOverlay, "document analysis records the latest completed live generation")
+SaveText(saveEchoChanged, saveEchoPath)
+Local saveEchoGeneration:Int = saveEchoServer.workspaces.dependencyCache.generation
+responses = saveEchoServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~q" + saveEchoUri + "~q,~qtype~q:2}]}}")
+Check(responses.length = 0 And saveEchoServer.workspaces.dependencyCache.generation = saveEchoGeneration And Not saveEchoDocument.liveOverlay, "a watched-file echo of the analyzed editor save performs no cache invalidation or diagnostic publication")
+saveEchoServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didClose~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + saveEchoUri + "~q}}}")
+DeleteDir(saveEchoDirectory, True)
 
 responses = server.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didChange~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/test.bmx~q,~qversion~q:2},~qcontentChanges~q:[{~qtext~q:~qSuperStrict\nLocal value:Int = 1~q}]}}")
 Check(responses.length = 1, "change republishes diagnostics")
