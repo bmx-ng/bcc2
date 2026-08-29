@@ -715,11 +715,15 @@ SaveText("SuperStrict~nCachedValue%", localImportInterface)
 Local commonInterface:TSnapshotText = snapshotResolver.ResolveInterface(localImportSource, "common.bmx", True, False)
 Check(commonInterface <> Null, "quoted source import loads its compiler interface from the sibling .bmx directory")
 Check(commonInterface.path = localImportInterface, "quoted source interface retains its generated path")
+Check(snapshotResolver.sourceDependencies.Contains(SnapshotPathKey(localImportInterface)), "snapshot dependency provenance records the exact compiler interface used")
 Local cachedCommonInterface:TSnapshotText = snapshotResolver.ResolveInterface(localImportSource, "common.bmx", True, False)
 Check(sharedDependencies.ParsedInterfaceCount() = 1, "unchanged compiler interfaces are parsed once across LSP snapshots")
 Check(commonInterface.interfaceFile <> cachedCommonInterface.interfaceFile And commonInterface.interfaceFile.declarations[0] <> cachedCommonInterface.interfaceFile.declarations[0], "parsed interface reuse returns a request-owned record graph")
 commonInterface.interfaceFile.declarations[0].documentationPath = "mutated"
 Check(Not cachedCommonInterface.interfaceFile.declarations[0].documentationPath.length, "request-local interface enrichment cannot leak through the LSP cache")
+Local invalidatedDependencyGeneration:Int = sharedDependencies.generation
+sharedDependencies.Invalidate(localImportInterface)
+Check(sharedDependencies.Count() = 0 And sharedDependencies.ParsedInterfaceCount() = 0 And sharedDependencies.generation = invalidatedDependencyGeneration + 1, "a watched interface invalidates only its cached dependency entry")
 SaveText("SuperStrict~nReplacementValue%", localImportInterface)
 Local replacedCommonInterface:TSnapshotText = snapshotResolver.ResolveInterface(localImportSource, "common.bmx", True, False)
 Check(replacedCommonInterface.interfaceFile.declarations[0].name = "ReplacementValue" And sharedDependencies.ParsedInterfaceCount() = 1, "interface publication invalidation replaces the parsed LSP cache entry")
@@ -2112,7 +2116,7 @@ Check(server.workspaces.adHoc.LatestAnalysis("file:///tmp/test.bmx").snapshot = 
 
 previousGeneration = server.workspaces.dependencyCache.generation
 responses = server.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile:///sdk/module.i~q,~qtype~q:2}]}}")
-Check(responses.length = 1 And server.workspaces.dependencyCache.generation = previousGeneration + 1, "dependency change starts a new cache generation and republishes diagnostics")
+Check(responses.length = 0 And server.workspaces.dependencyCache.generation = previousGeneration + 1, "an unrelated watched dependency invalidates its cache entry without republishing open documents")
 
 responses = server.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didChange~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/test.bmx~q,~qversion~q:2},~qcontentChanges~q:[{~qtext~q:~qSuperStrict\nLocal value:Int = 1~q}]}}")
 Check(responses.length = 1, "change republishes diagnostics")
@@ -2514,6 +2518,17 @@ Check(lockedScreenAnalysis <> Null And lockedScreenAnalysis.snapshot.rootDocumen
 Check(lockedWorkspace.ProjectRootCount() = 51 And lockedWorkspace.ProjectAnalysisCount() = 1, "a broad locked project graph discovers recursive quoted imports without eagerly analysing them")
 Check(lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedMainPath)) And lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedHelperPath)), "project discovery publishes reusable source interfaces for retained analyses")
 Check(lockedWorkspace.ProjectCandidateRoots("HelperValue", lockedHelperPath).length = 2, "project candidates exclude source roots that cannot import the requested declaration")
+Local lockedReachabilityEntries:Int
+For Local value:Object = EachIn lockedWorkspace.projectReachability.Values()
+	lockedReachabilityEntries :+ 1
+Next
+Check(lockedWorkspace.projectSourceSearchTerms.Contains(SnapshotPathKey(lockedHelperPath)) And lockedReachabilityEntries > 0, "project queries retain compact source terms and import reachability results")
+lockedWorkspace.ProjectCandidateRoots("Helper", lockedHelperPath)
+Local repeatedReachabilityEntries:Int
+For Local value:Object = EachIn lockedWorkspace.projectReachability.Values()
+	repeatedReachabilityEntries :+ 1
+Next
+Check(repeatedReachabilityEntries = lockedReachabilityEntries, "repeated partial project queries reuse cached import reachability")
 Local lockedImportedScope:TScope = lockedScreenAnalysis.model.ImportedScope("helper.bmx")
 Check(lockedImportedScope <> Null And lockedImportedScope.LookupLocal("HelperValue").length = 1, "locked root binds declarations from an imported source interface")
 responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:98,~qmethod~q:~qtextDocument/references~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile://" + lockedScreenPath + "~q},~qposition~q:{~qline~q:0,~qcharacter~q:26},~qcontext~q:{~qincludeDeclaration~q:true}}}")
@@ -2544,11 +2559,24 @@ Local lockedOverlaySource:String = lockedHelperSource + "~nFunction OverlayValue
 responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedOverlaySource, 3))
 Local lockedHelperAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedHelperPath)
 Check(lockedHelperAnalysis.model.globalScope.LookupLocal("OverlayValue").length = 1, "locked project graph rebuilds from unsaved imported-source overlays")
+Check(lockedWorkspace.ProjectCandidateRoots("OverlayValue", lockedHelperPath).length = 1, "project search terms refresh from unsaved source overlays")
 Local lockedUpdatedMainAnalysis:TLanguageAnalysis = TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath)))
 Check(lockedUpdatedMainAnalysis <> Null And lockedUpdatedMainAnalysis <> lockedMainAnalysis And lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath) <> Null, "a public declaration edit invalidates, republishes and rebuilds importing root analyses")
 Local lockedTopologySource:String = lockedOverlaySource.Replace("Import ~qnested.bmx~q", "Import ~qnested.bmx~q~nImport ~qadded.bmx~q")
 responses = lockedServer.HandlePayload(DidChangePayload("file://" + lockedHelperPath, lockedTopologySource, 4))
 Check(lockedWorkspace.ProjectRootCount() = 52 And TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) <> lockedUpdatedMainAnalysis, "a quoted-source topology edit rediscovers the project graph and rebuilds its locked root")
+Local lockedTopologyMainAnalysis:TLanguageAnalysis = TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath)))
+SaveText("SuperStrict~nFunction AddedValue:Int()~nReturn 9~nEnd Function", lockedAddedPath)
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile://" + lockedAddedPath + "~q,~qtype~q:2}]}}")
+Check(responses.length = 2 And TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) = lockedTopologyMainAnalysis, "a watched routine-body change republishes consumers without rebuilding their retained analyses")
+SaveText("SuperStrict~nFunction AddedValue:Int()~nReturn 9~nEnd Function~nFunction AddedPublic:Int()~nReturn 1~nEnd Function", lockedAddedPath)
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile://" + lockedAddedPath + "~q,~qtype~q:2}]}}")
+Check(responses.length = 2 And TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) <> lockedTopologyMainAnalysis, "a watched public declaration change rebuilds only importing project analyses")
+Local lockedWatchedMainAnalysis:TLanguageAnalysis = TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath)))
+SaveText("SuperStrict~nFunction NestedValue:Int()~nReturn 5~nEnd Function", lockedNestedPath)
+SaveText("SuperStrict~nFunction AddedValue:Int()~nReturn 10~nEnd Function~nFunction AddedPublic:Int()~nReturn 2~nEnd Function", lockedAddedPath)
+responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeWatchedFiles~q,~qparams~q:{~qchanges~q:[{~quri~q:~qfile://" + lockedNestedPath + "~q,~qtype~q:2},{~quri~q:~qfile://" + lockedAddedPath + "~q,~qtype~q:2}]}}")
+Check(responses.length = 2 And TLanguageAnalysis(lockedWorkspace.projectAnalyses.ValueForKey(SnapshotPathKey(lockedMainPath))) = lockedWatchedMainAnalysis, "a watched-file batch republishes each consumer once while retaining importers for body-only changes")
 responses = lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qworkspace/didChangeConfiguration~q,~qparams~q:{~qsettings~q:{~qworkspaces~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qrootSourcePath~q:~q~q}]}}}")
 lockedScreenAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath)
 Check(lockedWorkspace.configuration.rootSourcePath = "" And lockedWorkspace.ProjectAnalysisCount() = 0, "unlocking clears the cached project graph")
