@@ -347,6 +347,15 @@ Function CodeActionsAt:TJSONArray(server:TBlitzMaxLspServer, id:Int, uri:String,
 	Return TJSONArray(ObjectFrom(responses[0]).Get("result"))
 End Function
 
+Function FindCodeAction:TJSONObject(actions:TJSONArray, kind:String)
+	If Not actions Then Return Null
+	For Local index:Int = 0 Until actions.Size()
+		Local action:TJSONObject = TJSONObject(actions.Get(index))
+		If action And action.GetString("kind") = kind Then Return action
+	Next
+	Return Null
+End Function
+
 Function AllEditsUseName:Int(edits:TJSONArray, name:String)
 	If Not edits Or edits.Size() = 0 Then Return False
 	For Local index:Int = 0 Until edits.Size()
@@ -1452,8 +1461,8 @@ Local provenanceModuleDirectory:String = provenanceSdk + "/mod/brl.mod/stream.mo
 CreateDir(provenanceCoreDirectory, True)
 CreateDir(provenanceModuleDirectory, True)
 SaveText("Object^Null{~n-HashCode:UInt()=~qbbObjectHashCode~q~n}=~qbbObjectClass~q", provenanceCoreDirectory + "/blitz_classes.i")
-SaveText("SuperStrict~nRem~nbbdoc: Compiler interface wrapper.~nEnd Rem~nType TStreamWrapper Implements IReadable~nRem~nbbdoc: Reads bytes from the wrapper.~nreturns: The number of bytes read.~nparam: The requested @count.~nabout: Read details from source provenance.~nEnd Rem~nMethod Read:Int(count:Int)~nReturn count~nEnd Method~nEnd Type~nInterface IReadable~nEnd Interface~nType TDerivedWrapper Extends TStreamWrapper~nEnd Type~nType TImportedBox<T>~nMethod Value:T()~nEnd Method~nMethod ValueOr:T(fallback:T)~nEnd Method~nEnd Type~nType TImportedConstrained<T> Where T Extends IReadable~nEnd Type", provenanceModuleDirectory + "/stream.bmx")
-SaveText("IReadable^Null{ '@source ~qstream.bmx~q,16,0~n}AI=~qbrl_stream_IReadable~q~nTStreamWrapper^Object@IReadable{ '@source ~qstream.bmx~q,5,0~n-Read:Int(count:Int) '@source ~qstream.bmx~q,12,0~n}F=~qbrl_stream_TStreamWrapper~q~nTDerivedWrapper^TStreamWrapper{ '@source ~qstream.bmx~q,18,0~n}F=~qbrl_stream_TDerivedWrapper~q~nTImportedBox<T>^Object{~n-Value:T()~n-ValueOr:T(fallback:T)~n}K~n'@generic-template 30,~qbrl.stream::timportedbox#type/1~q,~qfixture-revision~q,~qtimportedbox.bmxgt~q,~qbmx-language-1~q~nTImportedConstrained<T> Where T Extends IReadable^Object{~n}K~n'@generic-template 31,~qbrl.stream::timportedconstrained#type/1~q,~qfixture-revision~q,~qtimportedconstrained.bmxgt~q,~qbmx-language-1~q~nImportedProbe:Int(value:Int)=~qbrl_stream_ImportedProbe~q '@source ~qstream.bmx~q,4,0~nPrivateProbe:Int()P=~qbrl_stream_PrivateProbe~q~nImportedLimit%=42%~nImportedGlobal%&=mem:p(~qbrl_stream_ImportedGlobal~q)", ModuleInterfacePath(provenanceSdk, "BRL.Stream", provenanceConfig.InterfaceMung()))
+SaveText("SuperStrict~nRem~nbbdoc: Compiler interface wrapper.~nEnd Rem~nType TStreamWrapper Implements IReadable~nRem~nbbdoc: Reads bytes from the wrapper.~nreturns: The number of bytes read.~nparam: The requested @count.~nabout: Read details from source provenance.~nEnd Rem~nMethod Read:Int(count:Int)~nReturn count~nEnd Method~nEnd Type~nInterface IReadable~nEnd Interface~nType TDerivedWrapper Extends TStreamWrapper~nEnd Type~nType TImportedBox<T>~nMethod Value:T()~nEnd Method~nMethod ValueOr:T(fallback:T)~nEnd Method~nEnd Type~nType TImportedConstrained<T> Where T Extends IReadable~nEnd Type~nInterface IImportedIterable<T>~nMethod GetIterator:T()~nEnd Interface", provenanceModuleDirectory + "/stream.bmx")
+SaveText("IReadable^Null{ '@source ~qstream.bmx~q,16,0~n}AI=~qbrl_stream_IReadable~q~nTStreamWrapper^Object@IReadable{ '@source ~qstream.bmx~q,5,0~n-Read:Int(count:Int) '@source ~qstream.bmx~q,12,0~n}F=~qbrl_stream_TStreamWrapper~q~nTDerivedWrapper^TStreamWrapper{ '@source ~qstream.bmx~q,18,0~n}F=~qbrl_stream_TDerivedWrapper~q~nTImportedBox<T>^Object{~n-Value:T()~n-ValueOr:T(fallback:T)~n}K~n'@generic-template 30,~qbrl.stream::timportedbox#type/1~q,~qfixture-revision~q,~qtimportedbox.bmxgt~q,~qbmx-language-1~q~nTImportedConstrained<T> Where T Extends IReadable^Object{~n}K~n'@generic-template 31,~qbrl.stream::timportedconstrained#type/1~q,~qfixture-revision~q,~qtimportedconstrained.bmxgt~q,~qbmx-language-1~q~nIImportedIterable<T>^Object{ '@source ~qstream.bmx~q,28,0~n-GetIterator:T() '@source ~qstream.bmx~q,29,0~n}AIK~n'@generic-template 32,~qbrl.stream::iimportediterable#type/1~q,~qfixture-revision~q,~qiimportediterable.bmxgt~q,~qbmx-language-1~q~nImportedProbe:Int(value:Int)=~qbrl_stream_ImportedProbe~q '@source ~qstream.bmx~q,4,0~nPrivateProbe:Int()P=~qbrl_stream_PrivateProbe~q~nImportedLimit%=42%~nImportedGlobal%&=mem:p(~qbrl_stream_ImportedGlobal~q)", ModuleInterfacePath(provenanceSdk, "BRL.Stream", provenanceConfig.InterfaceMung()))
 Local provenanceContext:TLspWorkspaceContext = TLspWorkspaceContext.Create("file:///provenance", "provenance", provenanceConfig, New TLspDependencyCache)
 Local provenanceDocument:TLspDocument = New TLspDocument
 provenanceDocument.uri = "file:///provenance/interface-provenance.bmx"
@@ -1536,6 +1545,30 @@ importedGenericSignatureDocument.text = "SuperStrict~nImport BRL.Stream~nLocal h
 Local importedGenericSignatureAnalysis:TLanguageAnalysis = provenanceContext.Analyze(importedGenericSignatureDocument)
 Local importedGenericSignature:TJSONObject = TJSONObject(TBlitzMaxLspNavigation.SignatureHelp(importedGenericSignatureDocument, provenanceContext, 3, importedGenericSignatureDocument.text.Split("~n")[3].length))
 Check(HasSignatureLabel(importedGenericSignature, "Method ValueOr:String(fallback:String)"), "signature help survives an incomplete imported generic member call with constructed types")
+Local importedInterfaceImplementDocument:TLspDocument = New TLspDocument
+importedInterfaceImplementDocument.uri = "file:///provenance/imported-interface-implement.bmx"
+importedInterfaceImplementDocument.path = "/provenance/imported-interface-implement.bmx"
+importedInterfaceImplementDocument.version = 7
+importedInterfaceImplementDocument.text = "SuperStrict~nImport BRL.Stream~nType TMissing Implements IImportedIterable<Int>~nEnd Type"
+Local importedInterfaceImplementAnalysis:TLanguageAnalysis = provenanceContext.Analyze(importedInterfaceImplementDocument)
+Local importedMissingType:TSymbol = importedInterfaceImplementAnalysis.model.globalScope.LookupLocal("TMissing")[0]
+Check(importedInterfaceImplementAnalysis.model.IsAbstractType(importedMissingType) And importedInterfaceImplementAnalysis.model.AbstractObligations(importedMissingType).length = 1, "an imported Interface method remains an abstract obligation without a redundant compact A flag")
+Local importedInterfaceParams:TJSONObject = JsonObject()
+importedInterfaceParams.Set("range", PointRange(2, 8))
+Local importedInterfaceContext:TJSONObject = JsonObject()
+Local importedInterfaceOnly:TJSONArray = JsonArray()
+importedInterfaceOnly.Append(New TJSONString.Create("refactor.rewrite.implement"))
+importedInterfaceContext.Set("only", importedInterfaceOnly)
+importedInterfaceContext.Set("diagnostics", JsonArray())
+importedInterfaceParams.Set("context", importedInterfaceContext)
+Local importedInterfaceActions:TJSONArray = TJSONArray(TBlitzMaxLspCodeActions.Query(importedInterfaceImplementDocument, provenanceContext, importedInterfaceParams, True))
+Check(importedInterfaceActions.Size() = 1, "a standalone Type offers missing members inherited from an installed generic Interface")
+Local importedInterfaceEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(importedInterfaceActions.Get(0)).Get("edit")))
+Local importedInterfaceSnippet:String = TJSONObject(TJSONObject(TJSONArray(importedInterfaceEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
+Check(importedInterfaceSnippet.Contains("Method GetIterator:Int()"), "installed generic Interface implementation substitutes its constructed return type")
+Local importedInterfaceHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(importedInterfaceImplementDocument, provenanceContext, 2, 38))
+Local importedInterfaceHoverText:String = TJSONObject(importedInterfaceHover.Get("contents")).GetString("value")
+Check(importedInterfaceHoverText.Contains("[`stream.bmx:28`](file:///tmp/blitzmax-lsp-provenance-sdk/mod/brl.mod/stream.mod/stream.bmx#L28)") And Not importedInterfaceHoverText.Contains(".i"), "generic Interface hover follows compact provenance to its source declaration")
 SaveText("SuperStrict~nRem~nbbdoc: Updated compiler interface wrapper documentation.~nEnd Rem~nType TStreamWrapper~nRem~nbbdoc: Reads bytes from the wrapper.~nreturns: The number of bytes read.~nparam: The requested @count.~nabout: Read details from source provenance.~nEnd Rem~nMethod Read:Int(count:Int)~nReturn count~nEnd Method~nEnd Type", provenanceModuleDirectory + "/stream.bmx")
 Local refreshedProvenanceHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(provenanceDocument, provenanceContext, 2, 16))
 Check(TJSONObject(refreshedProvenanceHover.Get("contents")).GetString("value").Contains("Updated compiler interface wrapper documentation."), "provenance documentation cache refreshes when source size or timestamp changes")
@@ -1885,6 +1918,9 @@ Local snippetCapabilityServer:TBlitzMaxLspServer = NewTestServer()
 snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:1,~qmethod~q:~qinitialize~q,~qparams~q:{~qcapabilities~q:{~qtextDocument~q:{~qcompletion~q:{~qcompletionItem~q:{~qsnippetSupport~q:true}}},~qworkspace~q:{~qworkspaceEdit~q:{~qsnippetEditSupport~q:true}}}}}")
 Check(snippetCapabilityServer.completionSnippetSupport, "initialize records completion-item snippet support from the client capabilities")
 Check(snippetCapabilityServer.workspaceSnippetEditSupport, "initialize records workspace snippet-edit support independently")
+Local progressCapabilityServer:TBlitzMaxLspServer = NewTestServer()
+progressCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:1,~qmethod~q:~qinitialize~q,~qparams~q:{~qcapabilities~q:{~qwindow~q:{~qworkDoneProgress~q:true}}}}")
+Check(progressCapabilityServer.workDoneProgressSupport, "initialize records standard client work-done progress support")
 snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didOpen~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/snippet-capability.bmx~q,~qlanguageId~q:~qblitzmax~q,~qversion~q:1,~qtext~q:~qSuperStrict\nFunction Add:Int(left:Int, right:Int)\nReturn left + right\nEnd Function\nAd~q}}}")
 Local snippetCapabilityResponses:String[] = snippetCapabilityServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:2,~qmethod~q:~qtextDocument/completion~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/snippet-capability.bmx~q},~qposition~q:{~qline~q:4,~qcharacter~q:2}}}")
 Local snippetCapabilityResult:TJSONArray = TJSONArray(ObjectFrom(snippetCapabilityResponses[0]).Get("result"))
@@ -2084,6 +2120,52 @@ Local inlineBBDocUri:String = "file:///tmp/inline-bbdoc.bmx"
 bbdocServer.HandlePayload(DidOpenPayload(inlineBBDocUri, "SuperStrict~nFunction Inline:Int() Return 1 End Function"))
 Check(CodeActionsAt(bbdocServer, 112, inlineBBDocUri, 1, 5).Size() = 1 And CodeActionsAt(bbdocServer, 113, inlineBBDocUri, 1, 27).Size() = 0, "same-line routine bodies do not count as declaration headers")
 
+Local implementUri:String = "file:///tmp/implement-members.bmx"
+Local implementSource:String = "SuperStrict~nInterface IMarker~nEnd Interface~nStruct SPoint~nEnd Struct~nType TBox<T>~nEnd Type~nInterface ITransform<T>~nMethod Apply:T(value:T, text:String, values:Int[], objectValue:Object, interfaceValue:IMarker, structValue:SPoint, callback:Closure<T(input:T)>)~nMethod Nested:TBox<T>(value:TBox<T>)~nEnd Interface~nType TAbstractBase<T> Abstract~nMethod Required:T(value:T Var) Abstract~nEnd Type~nType TWorker Extends TAbstractBase<String> Implements ITransform<Int>~nEnd Type"
+bbdocServer.HandlePayload(DidOpenPayload(implementUri, implementSource, 4))
+Local implementActions:TJSONArray = CodeActionsAt(bbdocServer, 114, implementUri, 14, 7, "refactor.rewrite.implement")
+Check(implementActions.Size() = 1, "a Type with inherited abstract obligations offers one missing-member refactoring")
+Local implementAction:TJSONObject = FindCodeAction(implementActions, "refactor.rewrite.implement")
+Check(implementAction <> Null And implementAction.GetString("title") = "Implement 3 missing members in TWorker", "missing-member generation reports the concrete Type and obligation count")
+Local implementDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(implementAction.Get("edit")))
+Local implementIdentifier:TJSONObject = TJSONObject(implementDocumentEdit.Get("textDocument"))
+Local implementEdits:TJSONArray = TJSONArray(implementDocumentEdit.Get("edits"))
+Local implementSnippetEdit:TJSONObject = TJSONObject(implementEdits.Get(0))
+Local implementSnippet:String = TJSONObject(implementSnippetEdit.Get("snippet")).GetString("value")
+Check(implementIdentifier.GetString("uri") = implementUri And implementIdentifier.GetInteger("version") = 4 And implementEdits.Size() = 1, "missing members use one versioned insertion edit")
+Check(implementSnippet.Contains("Method Required:String(value:String Var)") And implementSnippet.Contains("Method Apply:Int(value:Int, text:String, values:Int[], objectValue:Object, interfaceValue:IMarker, structValue:SPoint, callback:Closure<Int(input:Int)>)"), "generated stubs substitute inherited generic scalar, String, Array, Object, Interface, Struct, Closure and Var parameter types")
+Check(implementSnippet.Contains("Method Nested:TBox<Int>(value:TBox<Int>)") And implementSnippet.Contains("Throw ~q${1:Not implemented}~q") And implementSnippet.EndsWith("$0"), "generated stubs preserve nested constructed types and expose editable method bodies")
+Local implementInsertStart:TJSONObject = TJSONObject(TJSONObject(implementSnippetEdit.Get("range")).Get("start"))
+Check(implementInsertStart.GetInteger("line") = 15 And implementInsertStart.GetInteger("character") = 0, "missing members insert immediately before the Type terminator")
+Check(CodeActionsAt(bbdocServer, 115, implementUri, 8, 8, "refactor.rewrite.implement").Size() = 0, "Interfaces themselves do not receive implementation stubs")
+
+Local plainImplementDocument:TLspDocument = New TLspDocument
+plainImplementDocument.uri = implementUri
+plainImplementDocument.path = "/tmp/implement-members.bmx"
+plainImplementDocument.text = implementSource
+plainImplementDocument.version = 4
+Local plainImplementParams:TJSONObject = JsonObject()
+plainImplementParams.Set("range", PointRange(14, 7))
+Local plainImplementContext:TJSONObject = JsonObject()
+Local plainImplementOnly:TJSONArray = JsonArray()
+plainImplementOnly.Append(New TJSONString.Create("refactor.rewrite.implement"))
+plainImplementContext.Set("only", plainImplementOnly)
+plainImplementContext.Set("diagnostics", JsonArray())
+plainImplementParams.Set("context", plainImplementContext)
+Local plainImplementActions:TJSONArray = TJSONArray(TBlitzMaxLspCodeActions.Query(plainImplementDocument, bbdocServer.workspaces.adHoc, plainImplementParams, False))
+Local plainImplementDocumentEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(plainImplementActions.Get(0)).Get("edit")))
+Local plainImplementEdit:TJSONObject = TJSONObject(TJSONArray(plainImplementDocumentEdit.Get("edits")).Get(0))
+Local plainImplementText:String = plainImplementEdit.GetString("newText")
+Local plainInsertionOffset:Int = implementSource.Find("End Type", implementSource.Find("Type TWorker"))
+Local implementedSource:String = implementSource[..plainInsertionOffset] + plainImplementText + implementSource[plainInsertionOffset..]
+Local implementedAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(implementedSource, "/tmp/implemented-members.bmx")
+Local implementedWorker:TSymbol = implementedAnalysis.model.globalScope.LookupLocal("TWorker")[0]
+Check(Not implementedAnalysis.model.IsAbstractType(implementedWorker) And implementedAnalysis.model.AbstractObligations(implementedWorker).length = 0, "plain-text fallback generates semantically complete member implementations")
+
+Local completeImplementUri:String = "file:///tmp/complete-members.bmx"
+bbdocServer.HandlePayload(DidOpenPayload(completeImplementUri, "SuperStrict~nInterface IDone~nMethod Run:Int()~nEnd Interface~nType TDone Implements IDone~nMethod Run:Int()~nReturn 1~nEnd Method~nEnd Type"))
+Check(CodeActionsAt(bbdocServer, 116, completeImplementUri, 4, 7, "refactor.rewrite.implement").Size() = 0, "a complete Type does not offer a redundant missing-member action")
+
 Local plainBBDocUri:String = "file:///tmp/plain-bbdoc.bmx"
 codeActionServer.HandlePayload(DidOpenPayload(plainBBDocUri, "SuperStrict~nFunction Legacy:Int(value:Int)~nReturn value~nEnd Function", 3))
 Local plainActions:TJSONArray = CodeActionsAt(codeActionServer, 109, plainBBDocUri, 1, 4)
@@ -2220,6 +2302,13 @@ Local incompleteEnumSymbolsResponse:TJSONObject = ObjectFrom(responses[0])
 Local incompleteEnumSymbols:TJSONArray = TJSONArray(incompleteEnumSymbolsResponse.Get("result"))
 Check(incompleteEnumSymbols.Size() = 1 And TJSONObject(incompleteEnumSymbols.Get(0)).GetString("name") = "ETest", "unfinished Rem keeps the surrounding enum in the document outline")
 Check(DocumentSymbolRangesValid(incompleteEnumSymbols), "document-symbol selection ranges remain contained during unfinished Rem editing")
+
+Local incompleteInterfaceMethodUri:String = "file:///tmp/incomplete-interface-method.bmx"
+featureServer.HandlePayload(DidOpenPayload(incompleteInterfaceMethodUri, "Type TMyIter Implements IMyInterface~nEnd Type~n~nInterface IMyInterface~n    Method First:Int()~n    Method"))
+responses = featureServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:331,~qmethod~q:~qtextDocument/semanticTokens/full~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + incompleteInterfaceMethodUri + "~q}}}")
+Local incompleteInterfaceSemanticResponse:TJSONObject = ObjectFrom(responses[0])
+Local incompleteInterfaceSemanticResult:TJSONObject = TJSONObject(incompleteInterfaceSemanticResponse.Get("result"))
+Check(incompleteInterfaceSemanticResult <> Null And TJSONArray(incompleteInterfaceSemanticResult.Get("data")) <> Null, "semantic tokens tolerate an Interface method before its name is typed")
 
 responses = featureServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:34,~qmethod~q:~qtextDocument/documentHighlight~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/features.bmx~q},~qposition~q:{~qline~q:4,~qcharacter~q:6}}}")
 Local highlightsResponse:TJSONObject = ObjectFrom(responses[0])
@@ -2551,14 +2640,30 @@ For Local lockedBulkIndex:Int = 0 Until 48
 Next
 Local lockedServer:TBlitzMaxLspServer = NewTestServer()
 lockedServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:97,~qmethod~q:~qinitialize~q,~qparams~q:{~qworkspaceFolders~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qname~q:~qlocked-root~q}],~qinitializationOptions~q:{~qworkspaces~q:[{~quri~q:~qfile://" + lockedDirectory + "~q,~qrootSourcePath~q:~q" + lockedMainPath + "~q}]}}}")
+Local lockedProgress:TLspWorkDoneProjectProgress = TLspWorkDoneProjectProgress.Create(Null, True)
+lockedServer.workspaces.SetProjectProgress(lockedProgress)
 responses = lockedServer.HandlePayload(DidOpenPayload("file://" + lockedScreenPath, lockedScreenSource))
 Local lockedWorkspace:TLspWorkspaceContext = lockedServer.workspaces.Get("file://" + lockedDirectory)
 Local lockedScreenAnalysis:TLanguageAnalysis = lockedWorkspace.LatestAnalysis("file://" + lockedScreenPath)
 Check(lockedWorkspace.configuration.rootSourcePath = lockedMainPath, "workspace receives the locked build root from initialization options")
 Check(lockedScreenAnalysis <> Null And lockedScreenAnalysis.snapshot.rootDocument.path = lockedMainPath, "opening a closed Include analyses it through the locked root")
+Check(lockedProgress.emitted.length = 5, "an initial locked-project build emits create, begin, discovery, analysis and end progress messages")
+Local lockedProgressCreate:TJSONObject = ObjectFrom(lockedProgress.emitted[0])
+Local lockedProgressBegin:TJSONObject = ObjectFrom(lockedProgress.emitted[1])
+Local lockedProgressBeginValue:TJSONObject = TJSONObject(TJSONObject(lockedProgressBegin.Get("params")).Get("value"))
+Local lockedProgressEnd:TJSONObject = ObjectFrom(lockedProgress.emitted[4])
+Local lockedProgressEndValue:TJSONObject = TJSONObject(TJSONObject(lockedProgressEnd.Get("params")).Get("value"))
+Check(lockedProgressCreate.GetString("method") = "window/workDoneProgress/create" And lockedProgressBegin.GetString("method") = "$/progress" And lockedProgressBeginValue.GetString("kind") = "begin", "project analysis uses standard LSP work-done progress")
+Check(lockedProgressBeginValue.GetString("title").Contains("locked-root") And lockedProgressEndValue.GetString("kind") = "end" And lockedProgressEndValue.GetString("message") = "Project analysis ready", "project progress identifies its workspace and closes cleanly")
+Local lockedProgressResponse:TJSONObject = JsonObject()
+lockedProgressResponse.Set("jsonrpc", "2.0")
+lockedProgressResponse.Set("id", lockedProgressCreate.GetString("id"))
+lockedProgressResponse.Set("result", JsonNull())
+Check(lockedProgress.AcceptResponse(lockedProgressResponse), "the server consumes its work-done progress creation response")
 Check(lockedWorkspace.ProjectRootCount() = 51 And lockedWorkspace.ProjectAnalysisCount() = 1, "a broad locked project graph discovers recursive quoted imports without eagerly analysing them")
 Check(lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedMainPath)) And lockedWorkspace.liveInterfaces.Contains(SnapshotPathKey(lockedHelperPath)), "project discovery publishes reusable source interfaces for retained analyses")
 Check(lockedWorkspace.ProjectCandidateRoots("HelperValue", lockedHelperPath).length = 2, "project candidates exclude source roots that cannot import the requested declaration")
+Check(lockedProgress.emitted.length = 5, "cached project queries do not emit redundant progress notifications")
 Local lockedReachabilityEntries:Int
 For Local value:Object = EachIn lockedWorkspace.projectReachability.Values()
 	lockedReachabilityEntries :+ 1
