@@ -856,6 +856,16 @@ Local pairEchoPosition:TSourcePosition = genericMemberHoverAnalysis.syntaxTree.s
 Local pairEchoHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(genericMemberHoverDocument, firstContext, pairEchoPosition.line, pairEchoPosition.column))
 Local pairEchoHoverText:String = TJSONObject(pairEchoHover.Get("contents")).GetString("value")
 Check(pairEchoHoverText.Contains("Method Echo:Int(input:Int)") And pairEchoHoverText.Contains("Method Echo:T(input:T)"), "hover presents instantiated parameter and return types for a generic owner's Method")
+Local callableArgumentHoverDocument:TLspDocument = New TLspDocument
+callableArgumentHoverDocument.uri = "file:///first/callable-argument-hover.bmx"
+callableArgumentHoverDocument.path = "/first/callable-argument-hover.bmx"
+callableArgumentHoverDocument.text = "SuperStrict~nFunction Register:Object(eventKey:Int, callback:Int(value:Int), payload:Object)~nEnd Function~nFunction OnStart:Int(value:Int)~nReturn value~nEnd Function~nRegister(1, OnStart, Null)"
+Local callableArgumentHoverAnalysis:TLanguageAnalysis = firstContext.Analyze(callableArgumentHoverDocument)
+Local callableArgumentOffset:Int = callableArgumentHoverDocument.text.Find("OnStart", callableArgumentHoverDocument.text.Find("OnStart") + 1)
+Local callableArgumentPosition:TSourcePosition = callableArgumentHoverAnalysis.syntaxTree.source.Position(callableArgumentOffset)
+Local callableArgumentHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(callableArgumentHoverDocument, firstContext, callableArgumentPosition.line, callableArgumentPosition.column))
+Local callableArgumentHoverText:String = TJSONObject(callableArgumentHover.Get("contents")).GetString("value")
+Check(callableArgumentHoverText.Contains("Function OnStart:Int(value:Int)") And Not callableArgumentHoverText.Contains("eventKey:Int") And Not callableArgumentHoverText.Contains("Declared as:"), "hover over a thin function-pointer argument keeps the referenced routine signature instead of borrowing the enclosing call")
 Local inheritedValueOffset:Int = genericMemberHoverDocument.text.Find("value", genericMemberHoverDocument.text.Find("inherited.value"))
 Local inheritedValuePosition:TSourcePosition = genericMemberHoverAnalysis.syntaxTree.source.Position(inheritedValueOffset)
 Local inheritedValueHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(genericMemberHoverDocument, firstContext, inheritedValuePosition.line, inheritedValuePosition.column))
