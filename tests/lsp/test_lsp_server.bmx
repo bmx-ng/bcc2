@@ -1591,6 +1591,23 @@ Check(importedInterfaceActions.Size() = 1, "a standalone Type offers missing mem
 Local importedInterfaceEdit:TJSONObject = VersionedWorkspaceEdit(TJSONObject(TJSONObject(importedInterfaceActions.Get(0)).Get("edit")))
 Local importedInterfaceSnippet:String = TJSONObject(TJSONObject(TJSONArray(importedInterfaceEdit.Get("edits")).Get(0)).Get("snippet")).GetString("value")
 Check(importedInterfaceSnippet.Contains("Method GetIterator:Int() Override"), "installed generic Interface implementation substitutes its constructed return type and marks the generated Method as an override")
+Local inheritedLinkedListDocument:TLspDocument = New TLspDocument
+inheritedLinkedListDocument.uri = "file:///first/inherited-linked-list.bmx"
+inheritedLinkedListDocument.path = "/first/inherited-linked-list.bmx"
+inheritedLinkedListDocument.version = 1
+inheritedLinkedListDocument.text = "SuperStrict~nFramework BRL.Blitz~nImport Collections.LinkedList~nType GList<T> Extends TLinkedList<T>~nEnd Type~nLocal list:GList<String> = New GList<String>()"
+Local inheritedLinkedListAnalysis:TLanguageAnalysis = firstContext.Analyze(inheritedLinkedListDocument)
+Local inheritedLinkedListType:TSymbol = inheritedLinkedListAnalysis.model.globalScope.LookupLocal("GList")[0]
+Check(Not inheritedLinkedListAnalysis.model.IsAbstractType(inheritedLinkedListType) And inheritedLinkedListAnalysis.model.AbstractObligations(inheritedLinkedListType).length = 0 And Not HasDiagnostic(inheritedLinkedListAnalysis.model.diagnostics, "BMX3316"), "an imported constructed generic base retains its concrete Interface implementations")
+Local inheritedLinkedListParams:TJSONObject = JsonObject()
+inheritedLinkedListParams.Set("range", PointRange(3, 8))
+Local inheritedLinkedListContext:TJSONObject = JsonObject()
+Local inheritedLinkedListOnly:TJSONArray = JsonArray()
+inheritedLinkedListOnly.Append(New TJSONString.Create("refactor.rewrite.implement"))
+inheritedLinkedListContext.Set("only", inheritedLinkedListOnly)
+inheritedLinkedListContext.Set("diagnostics", JsonArray())
+inheritedLinkedListParams.Set("context", inheritedLinkedListContext)
+Check(TJSONArray(TBlitzMaxLspCodeActions.Query(inheritedLinkedListDocument, firstContext, inheritedLinkedListParams, True)).Size() = 0, "a generic child of TLinkedList does not offer already inherited members")
 Local importedInterfaceHover:TJSONObject = TJSONObject(TBlitzMaxLspHover.Query(importedInterfaceImplementDocument, provenanceContext, 2, 38))
 Local importedInterfaceHoverText:String = TJSONObject(importedInterfaceHover.Get("contents")).GetString("value")
 Check(importedInterfaceHoverText.Contains("[`stream.bmx:28`](file:///tmp/blitzmax-lsp-provenance-sdk/mod/brl.mod/stream.mod/stream.bmx#L28)") And Not importedInterfaceHoverText.Contains(".i"), "generic Interface hover follows compact provenance to its source declaration")

@@ -1917,9 +1917,6 @@ End Type"""
         derived = f"""
 
 Type TContract<T> Extends TContractBase<T>
-\tMethod Read:T()
-\t\tReturn value
-\tEnd Method{extra_method}
 \tMethod RuntimeKind:String()
 \t\tReturn "derived"
 \tEnd Method
@@ -2487,6 +2484,37 @@ NEGATIVE_CASES = {
 
 
 CURATED_POSITIVE_CASES = {
+    "regression-inherited-generic-interface-implementation": """SuperStrict
+Framework BRL.StandardIO
+
+Interface IMatrixIterator<T>
+End Interface
+
+Interface IMatrixIterable<T>
+    Method GetIterator:IMatrixIterator<T>()
+End Interface
+
+Interface IMatrixCollection<T> Extends IMatrixIterable<T>
+    Method CopyTo(array:T[], index:Int = 0)
+End Interface
+
+Type TMatrixCollection<T> Implements IMatrixCollection<T>
+    Method GetIterator:IMatrixIterator<T>()
+        Return Null
+    End Method
+    Method CopyTo(array:T[], index:Int = 0)
+        array[index] = array[index]
+    End Method
+End Type
+
+Type TMatrixList<T> Extends TMatrixCollection<T>
+End Type
+
+Local list:TMatrixList<String> = New TMatrixList<String>()
+Local values:String[] = ["inherited"]
+list.CopyTo(values)
+Print "generic-combination-ok:regression-inherited-generic-interface-implementation"
+""",
     "regression-inherited-closure-nested": application_source(
         "regression-inherited-closure-nested",
         ("int", "inherited", "closure", "nested", "single"),
