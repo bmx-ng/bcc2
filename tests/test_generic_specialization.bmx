@@ -86,8 +86,8 @@ Function CompilationSummary:String(result:TCompilerResult)
 	For Local diagnostic:TCompilerDiagnostic = EachIn result.diagnostics
 		summary :+ "; " + diagnostic.code + " " + diagnostic.message
 	Next
-	If result.genericPlan And result.genericPlan.registry Then
-		summary :+ ", nodes=" + result.genericPlan.registry.nodes.length + ", units=" + result.genericPlan.units.length
+	If result.genericPlan Then
+		If result.genericPlan.registry Then summary :+ ", nodes=" + result.genericPlan.registry.nodes.length + ", units=" + result.genericPlan.units.length
 	End If
 	Return summary
 End Function
@@ -340,7 +340,10 @@ Check(Not genericDebugTagImplementation.Contains(", ~q?~q,") And Not genericDebu
 Check(TCompilerGenericCUnitEmitter.TemplateDebugTypeTag(Builtin("Float64"), Null) = "h" And TCompilerGenericCUnitEmitter.TemplateDebugTypeTag(Builtin("Int128"), Null) = "j" And TCompilerGenericCUnitEmitter.TemplateDebugTypeTag(Builtin("Float128"), Null) = "k" And TCompilerGenericCUnitEmitter.TemplateDebugTypeTag(Builtin("Double128"), Null) = "m", "generic reflection typetags distinguish Float64 and every wide numeric category")
 Local staticStructDebugSource:String = "SuperStrict~nStruct TStaticFactory<T>~nFunction Create:TStaticFactory<T>()~nReturn New TStaticFactory<T>~nEnd Function~nEnd Struct~nGlobal staticFactory:TStaticFactory<Int> = TStaticFactory<Int>.Create()"
 Local staticStructDebugCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-static-struct-debug.bmx", staticStructDebugSource, Null, compilerOptions)
-Local staticStructDebugImplementation:String = staticStructDebugCompilation.genericPlan.units[0].implementation
+Local staticStructDebugImplementation:String
+If staticStructDebugCompilation.Succeeded() And staticStructDebugCompilation.genericPlan Then
+	If staticStructDebugCompilation.genericPlan.units.length Then staticStructDebugImplementation = staticStructDebugCompilation.genericPlan.units[0].implementation
+End If
 Check(staticStructDebugCompilation.Succeeded() And staticStructDebugImplementation.Contains("BBDEBUGSCOPE_FUNCTION, ~qCreate~q") And Not staticStructDebugImplementation.Contains("BBDEBUGDECL_LOCAL, ~qSelf~q"), "debug static generic-Struct routines publish a function scope without a nonexistent Self local: " + CompilationSummary(staticStructDebugCompilation))
 compilerOptions.debugInstrumentation = False
 compilerOptions.gdbDebug = False
@@ -1243,13 +1246,35 @@ Local capturedGenericClosureLiteralSource:String = "SuperStrict~nFunction MakeAd
 Local capturedGenericClosureLiteralCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-captured-closure-literal.bmx", capturedGenericClosureLiteralSource, Null, compilerOptions)
 Local capturedGenericClosureLiteralImplementation:String = capturedGenericClosureLiteralCompilation.genericPlan.units[0].implementation
 Check(capturedGenericClosureLiteralCompilation.Succeeded() And capturedGenericClosureLiteralCompilation.genericPlan.units[0].ir.routine.closureEnvironment And capturedGenericClosureLiteralCompilation.genericPlan.units[0].ir.routine.closureEnvironment.captures.length = 1 And capturedGenericClosureLiteralImplementation.Contains("_closure_environment") And capturedGenericClosureLiteralImplementation.Contains("_closure_new") And capturedGenericClosureLiteralImplementation.Contains("offsetof(BBClosure, environment)") And capturedGenericClosureLiteralImplementation.Contains("->capture_amount_"), "capturing managed Closure literals retain a typed environment plan and emit deterministic specialization-owned traced storage: " + CompilationSummary(capturedGenericClosureLiteralCompilation))
+Local yieldProtocolModuleSource:String = "SuperStrict~nModule BRL.Blitz~nInterface ICloseable~nMethod Close()~nEnd Interface~nInterface IIterator<T>~nMethod Current:T()~nMethod MoveNext:Int()~nEnd Interface~nInterface ICloseableIterator<T> Extends IIterator<T>, ICloseable~nEnd Interface"
+Local yieldProtocolModuleCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/brl.mod/blitz.mod/blitz.bmx", yieldProtocolModuleSource, Null, compilerOptions)
+Local yieldProtocolArtifactDiagnostics:TCompilerDiagnostic[]
+Local yieldProtocolOutputs:TCompilerGenericTemplateOutput[] = TBlitzMaxCompiler.EmitGenericTemplateArtifacts(yieldProtocolModuleCompilation, yieldProtocolArtifactDiagnostics)
+Local yieldProtocolInterfaceDiagnostics:TCompilerDiagnostic[]
+Local yieldProtocolInterface:String = TBlitzMaxCompiler.EmitInterface(yieldProtocolModuleCompilation, yieldProtocolInterfaceDiagnostics)
+Local yieldProtocolResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
+yieldProtocolResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", yieldProtocolInterface)
+For Local yieldProtocolOutput:TCompilerGenericTemplateOutput = EachIn yieldProtocolOutputs
+	yieldProtocolResolver.AddGenericTemplate(yieldProtocolOutput.artifactReference, "sdk/" + yieldProtocolOutput.artifactReference, yieldProtocolOutput.content)
+Next
+Check(yieldProtocolModuleCompilation.Succeeded() And yieldProtocolArtifactDiagnostics.length = 0 And yieldProtocolInterfaceDiagnostics.length = 0 And yieldProtocolOutputs.length = 2, "yield protocol fixture publishes its generic iterator Interfaces: " + CompilationSummary(yieldProtocolModuleCompilation))
 Local genericYieldClosureSource:String = "SuperStrict~nImport BRL.Blitz~nFunction CapturedValues<T>:ICloseableIterator<T>(first:T,second:T)~nLocal current:T=first~nLocal read:Closure<T()>=Function()~nReturn current~nEnd Function~nYield read()~ncurrent=second~nYield read()~nEnd Function~nGlobal capturedValues:ICloseableIterator<String>=CapturedValues<String>(~qfirst~q,~qsecond~q)"
-Local genericYieldClosureCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-yield-closure.bmx", genericYieldClosureSource, Null, compilerOptions)
-Local genericYieldClosureImplementation:String = genericYieldClosureCompilation.genericPlan.units[0].implementation
+Local genericYieldClosureCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-yield-closure.bmx", genericYieldClosureSource, yieldProtocolResolver, compilerOptions)
+Local genericYieldClosureImplementation:String
+If genericYieldClosureCompilation.genericPlan Then
+	For Local genericYieldClosureUnit:TCompilerGenericUnit = EachIn genericYieldClosureCompilation.genericPlan.units
+		If genericYieldClosureUnit.specialization.artifact.identity.qualifiedName = "CapturedValues" Then genericYieldClosureImplementation = genericYieldClosureUnit.implementation; Exit
+	Next
+End If
 Check(genericYieldClosureCompilation.Succeeded() And genericYieldClosureImplementation.Contains("_iterator_obj") And genericYieldClosureImplementation.Contains("closure_environment_") And genericYieldClosureImplementation.Contains("state->closure_environment_") And genericYieldClosureImplementation.Contains("_closure_new"), "generic yielding routines retain capturing Closure environments in their iterator state: " + CompilationSummary(genericYieldClosureCompilation))
-Local genericYieldingClosureLiteralSource:String = "SuperStrict~nImport BRL.Blitz~nFunction Factory<T>:Closure<ICloseableIterator<T>()>(value:T)~nReturn Function()~nYield value~nEnd Function~nEnd Function~nGlobal factory:Closure<ICloseableIterator<String>()>=Factory<String>(~qvalue~q)~nGlobal values:ICloseableIterator<String>=factory()"
-Local genericYieldingClosureLiteralCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-yielding-closure-literal.bmx", genericYieldingClosureLiteralSource, Null, compilerOptions)
-Local genericYieldingClosureLiteralImplementation:String = genericYieldingClosureLiteralCompilation.genericPlan.units[0].implementation
+Local genericYieldingClosureLiteralSource:String = "SuperStrict~nImport BRL.Blitz~nFunction Factory<T>:Closure<ICloseableIterator<T>()>(value:T)~nReturn Function()~nYield value~nEnd Function~nEnd Function~nGlobal iteratorFactory:Closure<ICloseableIterator<String>()>=Factory<String>(~qvalue~q)~nGlobal values:ICloseableIterator<String>=iteratorFactory()"
+Local genericYieldingClosureLiteralCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-yielding-closure-literal.bmx", genericYieldingClosureLiteralSource, yieldProtocolResolver, compilerOptions)
+Local genericYieldingClosureLiteralImplementation:String
+If genericYieldingClosureLiteralCompilation.genericPlan Then
+	For Local genericYieldingClosureLiteralUnit:TCompilerGenericUnit = EachIn genericYieldingClosureLiteralCompilation.genericPlan.units
+		If genericYieldingClosureLiteralUnit.specialization.artifact.identity.qualifiedName = "Factory" Then genericYieldingClosureLiteralImplementation = genericYieldingClosureLiteralUnit.implementation; Exit
+	Next
+End If
 Check(genericYieldingClosureLiteralCompilation.Succeeded() And genericYieldingClosureLiteralImplementation.Contains("incoming_closure_environment") And genericYieldingClosureLiteralImplementation.Contains("_iterator_MoveNext") And genericYieldingClosureLiteralImplementation.Contains("state->incoming_closure_environment = environment"), "capturing generic Closure literal bodies lower Yield against their retained incoming environment: " + CompilationSummary(genericYieldingClosureLiteralCompilation))
 Local catchClosureModuleSource:String = "SuperStrict~nModule Collections.CatchClosure~nFunction RememberCatch<T>:Closure<String()>(value:String)~nTry~nThrow value~nCatch problem:String~nReturn Function()~nReturn problem~nEnd Function~nEnd Try~nEnd Function"
 Local catchClosureModuleCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/collections.mod/catchclosure.mod/catchclosure.bmx", catchClosureModuleSource, Null, compilerOptions)
@@ -3292,10 +3317,12 @@ Local defaultInterfaceConsumerSource:String = "SuperStrict~nImport Collections.D
 Local defaultInterfaceConsumerCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("default-interface-consumer.bmx", defaultInterfaceConsumerSource, defaultInterfaceModuleResolver, compilerOptions)
 Local importedDefaultInterfaceUnit:TCompilerGenericUnit
 Local importedDefaultTypeUnit:TCompilerGenericUnit
-For Local importedDefaultUnit:TCompilerGenericUnit = EachIn defaultInterfaceConsumerCompilation.genericPlan.units
-	If importedDefaultUnit.ir.isInterface Then importedDefaultInterfaceUnit = importedDefaultUnit Else importedDefaultTypeUnit = importedDefaultUnit
-Next
 Check(defaultInterfaceConsumerCompilation.Succeeded(), "a consumer reconstructs and specializes a published generic Interface Default without source text: " + CompilationSummary(defaultInterfaceConsumerCompilation))
+If defaultInterfaceConsumerCompilation.genericPlan Then
+	For Local importedDefaultUnit:TCompilerGenericUnit = EachIn defaultInterfaceConsumerCompilation.genericPlan.units
+		If importedDefaultUnit.ir.isInterface Then importedDefaultInterfaceUnit = importedDefaultUnit Else importedDefaultTypeUnit = importedDefaultUnit
+	Next
+End If
 Check(importedDefaultInterfaceUnit And importedDefaultInterfaceUnit.ir.methods[1].interfaceMethodKind = TEMPLATE_INTERFACE_METHOD_DEFAULT And importedDefaultInterfaceUnit.implementation.Contains(importedDefaultInterfaceUnit.ir.methods[1].abiName + "(BBOBJECT self"), "the imported closed Interface unit owns its reconstructed Default body")
 Check(importedDefaultTypeUnit And importedDefaultTypeUnit.implementation.Contains(importedDefaultInterfaceUnit.ir.methods[1].abiName), "the imported implementing Type table references the one Interface-owned Default implementation")
 
