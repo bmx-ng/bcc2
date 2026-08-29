@@ -66,6 +66,10 @@ Check(callableReturnFile.declarations[0].routineSignature.parameters.length = 1 
 Local stdcallReturnFile:TInterfaceFile = TInterfaceFileParser.Parse("Choose%(value% Var)W(enabled%)W=~qexample_Choose__Bint~q", "stdcall-return.i")
 Check(stdcallReturnFile.diagnostics.length = 0 And stdcallReturnFile.declarations.length = 1, "stdcall callable-return interface parser diagnostics")
 Check(stdcallReturnFile.declarations[0].routineSignature.callableReturnType.callingConventionToken.text = "W" And stdcallReturnFile.declarations[0].flags.Contains("W"), "compact routine separates returned-callable stdcall from the routine's own stdcall ABI")
+Local unboundRoutineFlagsFile:TInterfaceFile = TInterfaceFileParser.Parse("IDefault<T>^Object{~n-Describe:T(value:T)D~n}AIK~nKeep<T>:T(value:T) Where T Extends Object", "unbound-routine-flags.i")
+Check(unboundRoutineFlagsFile.diagnostics.length = 0 And unboundRoutineFlagsFile.declarations.length = 2, "generic compact routines without external assignments parse")
+Check(unboundRoutineFlagsFile.declarations[0].members[0].flags = "D", "generic Interface Default methods retain their suffix flag without an external assignment")
+Check(unboundRoutineFlagsFile.declarations[1].flags.length = 0 And unboundRoutineFlagsFile.declarations[1].routineSignature.constraints.length = 1, "a generic routine constraint is not mistaken for routine flags")
 
 Local externalInterfaceText:String = "IUnknown_^Null{~n-QueryInterface%(riid@*,value??IUnknown_ Var)WA=~qQueryInterface~q~n-AddRef%()WA=~qAddRef~q~n}EI=0"
 Local externalInterfaceFile:TInterfaceFile = TInterfaceFileParser.Parse(externalInterfaceText, "native-interface.i")
