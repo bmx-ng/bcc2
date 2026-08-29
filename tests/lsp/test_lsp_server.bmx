@@ -2303,6 +2303,13 @@ Local incompleteEnumSymbols:TJSONArray = TJSONArray(incompleteEnumSymbolsRespons
 Check(incompleteEnumSymbols.Size() = 1 And TJSONObject(incompleteEnumSymbols.Get(0)).GetString("name") = "ETest", "unfinished Rem keeps the surrounding enum in the document outline")
 Check(DocumentSymbolRangesValid(incompleteEnumSymbols), "document-symbol selection ranges remain contained during unfinished Rem editing")
 
+Local incompleteInterfaceMethodUri:String = "file:///tmp/incomplete-interface-method.bmx"
+featureServer.HandlePayload(DidOpenPayload(incompleteInterfaceMethodUri, "Type TMyIter Implements IMyInterface~nEnd Type~n~nInterface IMyInterface~n    Method First:Int()~n    Method"))
+responses = featureServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:331,~qmethod~q:~qtextDocument/semanticTokens/full~q,~qparams~q:{~qtextDocument~q:{~quri~q:~q" + incompleteInterfaceMethodUri + "~q}}}")
+Local incompleteInterfaceSemanticResponse:TJSONObject = ObjectFrom(responses[0])
+Local incompleteInterfaceSemanticResult:TJSONObject = TJSONObject(incompleteInterfaceSemanticResponse.Get("result"))
+Check(incompleteInterfaceSemanticResult <> Null And TJSONArray(incompleteInterfaceSemanticResult.Get("data")) <> Null, "semantic tokens tolerate an Interface method before its name is typed")
+
 responses = featureServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:34,~qmethod~q:~qtextDocument/documentHighlight~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/features.bmx~q},~qposition~q:{~qline~q:4,~qcharacter~q:6}}}")
 Local highlightsResponse:TJSONObject = ObjectFrom(responses[0])
 Local highlights:TJSONArray = TJSONArray(highlightsResponse.Get("result"))

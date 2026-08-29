@@ -92,4 +92,14 @@ qualifiedSuperTypeOffset = qualifiedSuperSource.Find("IBase", qualifiedSuperType
 Local qualifiedSuperLocation:TSemanticLocation = TSemanticLocation.Query(qualifiedSuperAnalysis.model, qualifiedSuperNavigator, qualifiedSuperTypeOffset)
 Check(qualifiedSuperLocation.symbol <> Null And qualifiedSuperLocation.symbol.name = "IBase" And qualifiedSuperLocation.semanticType.DisplayName() = "IBase<T>", "qualified Interface Super indexes its nested constructed type for navigation and hover")
 
+Local incompleteInterfaceSource:String = "Type TMyIter Implements IMyInterface~nEnd Type~n~n~n~nInterface IMyInterface~n    Method First:Int()~n    Method Sec"
+Local incompleteInterfaceAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(incompleteInterfaceSource, "incomplete-interface-method.bmx")
+Check(incompleteInterfaceAnalysis <> Null And incompleteInterfaceAnalysis.syntaxTree <> Null, "an incomplete Interface method remains parseable during live editing")
+
+Local emptyInterfaceMethodSource:String = "Type TMyIter Implements IMyInterface~nEnd Type~n~nInterface IMyInterface~n    Method"
+Local emptyInterfaceMethodParse:TParseResult = TBlitzMaxParser.ParseText(emptyInterfaceMethodSource, "empty-interface-method.bmx")
+Check(emptyInterfaceMethodParse <> Null And emptyInterfaceMethodParse.syntaxTree <> Null, "an Interface method without a name produces a recoverable syntax tree")
+Local emptyInterfaceMethodAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(emptyInterfaceMethodSource, "empty-interface-method.bmx")
+Check(emptyInterfaceMethodAnalysis <> Null And emptyInterfaceMethodAnalysis.syntaxTree <> Null, "an Interface method without a name remains parseable during live editing")
+
 Print "bcc2 syntax-navigation tests passed"
