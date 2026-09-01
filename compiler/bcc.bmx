@@ -20,7 +20,7 @@ Function PrintVersion()
 End Function
 
 Function Usage()
-	Print "Usage: bcc [--dump-ir|--emit-c|--emit-runtime-c|--emit-runtime-header|--emit-interface|--emit-build] [-o <path>] [--build-c <relative-path>] [--build-header <relative-path>] [--build-interface <relative-path>] [--build-manifest <relative-path>] [--build-reference-root <path>] [--sdk <path>] [--module <name>] [--source-unit <relative-path>] [--application-identity <name>] [--application-source] [--debug|--release] [--coverage] [--platform <name>] [--arch <name>] [--app-type console|gui] [--framework <module>] [--threaded|--single-threaded] <source.bmx>"
+Print "Usage: bcc [--dump-ir|--emit-c|--emit-runtime-c|--emit-runtime-header|--emit-interface|--emit-build] [-o <path>] [--build-c <relative-path>] [--build-header <relative-path>] [--build-interface <relative-path>] [--build-manifest <relative-path>] [--build-reference-root <path>] [--sdk <path>] [--module <name>] [--source-unit <relative-path>] [--application-identity <name>] [--application-source] [--debug|--release] [--no-debug-instrumentation] [--coverage] [--platform <name>] [--arch <name>] [--app-type console|gui] [--framework <module>] [--threaded|--single-threaded] [--no-runtime] <source.bmx>"
 End Function
 
 If AppArgs.length < 2 Then
@@ -110,6 +110,8 @@ While index < AppArgs.length
 		Case "--release", "-r"
 			options.buildMode = "release"
 			options.debugInstrumentation = False
+		Case "--no-debug-instrumentation"
+			options.debugInstrumentation = False
 		Case "--coverage", "-cov"
 			options.coverageInstrumentation = True
 		Case "--platform", "-p"
@@ -138,6 +140,8 @@ While index < AppArgs.length
 			options.threaded = True
 		Case "--single-threaded"
 			options.threaded = False
+		Case "--no-runtime"
+			options.implicitRuntime = False
 		Case "--verbose", "-v"
 			options.verbose = True
 		Case "--gdb-debug", "-d"
@@ -172,6 +176,10 @@ If Not CompilerTargetSupported(options.targetPlatform, options.targetArchitectur
 End If
 If options.applicationSourceUnit And (Not options.sourceModuleName.length Or Not options.applicationIdentity.length) Then
 	Print "--application-source requires --module and --application-identity"
+	exit_(1)
+End If
+If Not options.implicitRuntime And emitC > 1 And emitC <> 4 And emitC <> 5 Then
+	Print "--no-runtime is supported only by standalone C, IR, or interface emission"
 	exit_(1)
 End If
 

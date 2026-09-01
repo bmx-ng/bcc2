@@ -726,6 +726,55 @@ For Local scalarExpressionUnit:TCompilerGenericUnit = EachIn scalarExpressionCom
 	scalarExpressionImplementations :+ scalarExpressionUnit.implementation
 Next
 Check(scalarExpressionImplementations.Contains("return (-(left + (right * right)));") And scalarExpressionImplementations.Contains("return ((BBINT)value);"), "closed generic scalar expressions lower deterministically in specialization-owned C units")
+Local genericTypeMeasureSource:String = "SuperStrict~nFunction TypeSize<T>:Int()~nReturn SizeOf(T)~nEnd Function~nFunction TypeAlignment<T>:Int()~nReturn AlignOf(T)~nEnd Function~nGlobal byteSize:Int = TypeSize<Byte>()~nGlobal longSize:Int = TypeSize<Long>()~nGlobal uintAlignment:Int = TypeAlignment<UInt>()"
+Local genericTypeMeasureCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-type-measures.bmx", genericTypeMeasureSource, Null, compilerOptions)
+Local genericTypeMeasureImplementations:String
+For Local genericTypeMeasureUnit:TCompilerGenericUnit = EachIn genericTypeMeasureCompilation.genericPlan.units
+	genericTypeMeasureImplementations :+ genericTypeMeasureUnit.implementation
+Next
+Check(genericTypeMeasureCompilation.Succeeded() And genericTypeMeasureCompilation.genericPlan.units.length = 3, "generic SizeOf and AlignOf specialize for concrete target types: " + CompilationSummary(genericTypeMeasureCompilation))
+Check(genericTypeMeasureImplementations.Contains("sizeof(BBBYTE)") And genericTypeMeasureImplementations.Contains("sizeof(BBLONG)") And genericTypeMeasureImplementations.Contains("__alignof__(BBUINT)"), "desktop generic type measurements use the selected desktop C ABI")
+Local picoTypeMeasureOptions:TCompilerOptions = TCompilerOptions.CreateDefault()
+picoTypeMeasureOptions.requireCoreInterface = False
+picoTypeMeasureOptions.implicitRuntime = False
+picoTypeMeasureOptions.sourceModuleName = "Tests.GenericTypeMeasure"
+picoTypeMeasureOptions.targetPlatform = "pico"
+picoTypeMeasureOptions.targetArchitecture = "arm"
+picoTypeMeasureOptions.conditionalSymbols = ["bmxng", "pico", "arm"]
+Local picoTypeMeasureCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-pico-type-measures.bmx", genericTypeMeasureSource, Null, picoTypeMeasureOptions)
+Local picoTypeMeasureImplementations:String
+For Local picoTypeMeasureUnit:TCompilerGenericUnit = EachIn picoTypeMeasureCompilation.genericPlan.units
+	picoTypeMeasureImplementations :+ picoTypeMeasureUnit.implementation
+Next
+Check(picoTypeMeasureCompilation.Succeeded() And picoTypeMeasureCompilation.genericPlan.units.length = 3, "generic SizeOf and AlignOf specialize for Pico: " + CompilationSummary(picoTypeMeasureCompilation))
+Check(picoTypeMeasureImplementations.Contains("sizeof(int8_t)") And picoTypeMeasureImplementations.Contains("sizeof(int64_t)") And picoTypeMeasureImplementations.Contains("__alignof__(uint32_t)"), "Pico generic type measurements use the selected ARM C ABI")
+Local importedTypeMeasureModuleSource:String = "SuperStrict~nModule Collections.TypeMeasure~nStruct SMeasuredLayout~nField tag:Byte~nField value:Long~nEnd Struct~nFunction ImportedTypeSize<T>:Int()~nReturn SizeOf(T)~nEnd Function~nFunction ImportedTypeAlignment<T>:Int()~nReturn AlignOf(T)~nEnd Function"
+Local importedTypeMeasureModule:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/collections.mod/typemeasure.mod/typemeasure.bmx", importedTypeMeasureModuleSource, Null, compilerOptions)
+Local importedTypeMeasureArtifactDiagnostics:TCompilerDiagnostic[]
+Local importedTypeMeasureOutputs:TCompilerGenericTemplateOutput[] = TBlitzMaxCompiler.EmitGenericTemplateArtifacts(importedTypeMeasureModule, importedTypeMeasureArtifactDiagnostics)
+Local importedTypeMeasureInterfaceDiagnostics:TCompilerDiagnostic[]
+Local importedTypeMeasureInterface:String = TBlitzMaxCompiler.EmitInterface(importedTypeMeasureModule, importedTypeMeasureInterfaceDiagnostics)
+Local importedTypeMeasureResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
+importedTypeMeasureResolver.AddInterface("collections.typemeasure", "sdk/collections.typemeasure.i", importedTypeMeasureInterface)
+For Local importedTypeMeasureOutput:TCompilerGenericTemplateOutput = EachIn importedTypeMeasureOutputs
+	importedTypeMeasureResolver.AddGenericTemplate(importedTypeMeasureOutput.artifactReference, "sdk/" + importedTypeMeasureOutput.artifactReference, importedTypeMeasureOutput.content)
+Next
+Local importedTypeMeasureConsumerSource:String = "SuperStrict~nImport Collections.TypeMeasure~nGlobal layoutSize:Int = ImportedTypeSize<SMeasuredLayout>()~nGlobal pointerSize:Int = ImportedTypeSize<Byte Ptr>()~nGlobal layoutAlignment:Int = ImportedTypeAlignment<SMeasuredLayout>()"
+Local importedTypeMeasureConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("generic-imported-type-measures.bmx", importedTypeMeasureConsumerSource, importedTypeMeasureResolver, compilerOptions)
+Local importedTypeMeasureImplementations:String
+For Local importedTypeMeasureUnit:TCompilerGenericUnit = EachIn importedTypeMeasureConsumer.genericPlan.units
+	importedTypeMeasureImplementations :+ importedTypeMeasureUnit.implementation
+Next
+Check(importedTypeMeasureModule.Succeeded() And importedTypeMeasureArtifactDiagnostics.length = 0 And importedTypeMeasureInterfaceDiagnostics.length = 0 And importedTypeMeasureOutputs.length = 2, "a module publishes generic target type measurements as source-free canonical artifacts")
+Check(importedTypeMeasureConsumer.Succeeded() And importedTypeMeasureConsumer.genericPlan.units.length = 3, "imported generic SizeOf and AlignOf specialize for Struct and pointer types: " + CompilationSummary(importedTypeMeasureConsumer))
+Check(importedTypeMeasureImplementations.Contains("sizeof(struct collections_typemeasure_SMeasuredLayout)") And importedTypeMeasureImplementations.Contains("sizeof(BBBYTE *)") And importedTypeMeasureImplementations.Contains("__alignof__(struct collections_typemeasure_SMeasuredLayout)"), "imported generic type measurements retain published Struct layout identities and pointer ABI")
+Local picoImportedTypeMeasureConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("generic-pico-imported-type-measures.bmx", importedTypeMeasureConsumerSource, importedTypeMeasureResolver, picoTypeMeasureOptions)
+Local picoImportedTypeMeasureImplementations:String
+For Local picoImportedTypeMeasureUnit:TCompilerGenericUnit = EachIn picoImportedTypeMeasureConsumer.genericPlan.units
+	picoImportedTypeMeasureImplementations :+ picoImportedTypeMeasureUnit.implementation
+Next
+Check(picoImportedTypeMeasureConsumer.Succeeded() And picoImportedTypeMeasureConsumer.genericPlan.units.length = 3, "imported generic SizeOf and AlignOf specialize for Pico Struct and pointer types: " + CompilationSummary(picoImportedTypeMeasureConsumer))
+Check(picoImportedTypeMeasureImplementations.Contains("sizeof(struct collections_typemeasure_SMeasuredLayout)") And picoImportedTypeMeasureImplementations.Contains("sizeof(int8_t *)") And picoImportedTypeMeasureImplementations.Contains("__alignof__(struct collections_typemeasure_SMeasuredLayout)"), "imported generic type measurements preserve the published Struct identity while selecting the Pico pointer ABI")
 Local managedExpressionSource:String = "SuperStrict~nFunction Join<T>:T(left:T, right:T)~nReturn left + right~nEnd Function~nGlobal joined:String = Join(~qleft~q, ~qright~q)"
 Local managedExpressionCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-managed-expression.bmx", managedExpressionSource, Null, compilerOptions)
 Check(managedExpressionCompilation.Succeeded() And managedExpressionCompilation.genericPlan.units.length = 1 And managedExpressionCompilation.genericPlan.units[0].implementation.Contains("return bbStringConcat(left, right);"), "closed generic String concatenation lowers through the managed runtime helper")

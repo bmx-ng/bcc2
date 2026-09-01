@@ -198,6 +198,8 @@ Type TBcc2Engine
 				Case "--release", "-r"
 					options.buildMode = "release"
 					options.debugInstrumentation = False
+				Case "--no-debug-instrumentation"
+					options.debugInstrumentation = False
 				Case "--coverage", "-cov"
 					options.coverageInstrumentation = True
 				Case "--platform", "-p"
