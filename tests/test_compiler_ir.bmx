@@ -1052,6 +1052,19 @@ resolver.AddInterface("native-common.bmx", "sdk/mod/acme.mod/multisource.mod/.bm
 Local ownedNativeConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/acme.mod/multisource.mod/native-consumer.bmx", "SuperStrict~nImport ~qnative-common.bmx~q~nLocal result:Int=SharedNative(1)~nSharedHandle=Null", resolver, TestOptions())
 Check(ownedNativeConsumer.Succeeded() And ownedNativeConsumer.ir.externalFunctions.length = 1 And ownedNativeConsumer.ir.externalGlobals.length = 1, "another source in the owning module consumes public native declarations through the compact interface")
 
+Local externalDefaultSource:String = "SuperStrict~nModule acme.nativedefaults~nExtern~nFunction NativeDefaults:Int(count:Int=7,enabled:Int=True,ratio:Float=1.5,label:String=~qready~q,data:Byte Ptr=Null,callback:Int(value:Int)=Null)=~qacme_native_defaults~q~nEnd Extern"
+Local externalDefaultModule:TCompilerResult = TBlitzMaxCompiler.Compile("/sdk/mod/acme.mod/nativedefaults.mod/nativedefaults.bmx", externalDefaultSource, resolver, TestOptions())
+Local externalDefaultInterfaceDiagnostics:TCompilerDiagnostic[]
+Local externalDefaultInterface:String = TBlitzMaxCompiler.EmitInterface(externalDefaultModule, externalDefaultInterfaceDiagnostics)
+Check(externalDefaultModule.Succeeded() And externalDefaultModule.ir.externalFunctions.length = 1 And externalDefaultModule.ir.externalFunctions[0].parameters.length = 6, "source Extern function with default arguments lowers successfully")
+Check(externalDefaultModule.ir.externalFunctions[0].parameters[0].isOptional And externalDefaultModule.ir.externalFunctions[0].parameters[0].defaultKind = CONSTANT_VALUE_INTEGER And externalDefaultModule.ir.externalFunctions[0].parameters[0].defaultText = "7", "source Extern function retains optional/default metadata in typed IR")
+Check(externalDefaultInterfaceDiagnostics.length = 0 And Contains(externalDefaultInterface, "count%=7%") And Contains(externalDefaultInterface, "enabled%=1%") And Contains(externalDefaultInterface, "ratio#=1.5#") And Contains(externalDefaultInterface, "label$=$~qready~q") And Contains(externalDefaultInterface, "data@*=0") And Contains(externalDefaultInterface, "callback%(arg0%)=Null"), "compact interfaces publish scalar, String, pointer, and callable defaults on external functions")
+resolver.AddInterface("acme.nativedefaults", "sdk/acme.nativedefaults.i", externalDefaultInterface)
+Local externalDefaultConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("external-default-consumer.bmx", "SuperStrict~nImport acme.nativedefaults~nLocal result:Int=NativeDefaults()", resolver, TestOptions())
+Local externalDefaultConsumerDiagnostics:TCompilerDiagnostic[]
+Local externalDefaultConsumerC:String = TBlitzMaxCompiler.EmitRuntimeC(externalDefaultConsumer, externalDefaultConsumerDiagnostics)
+Check(externalDefaultConsumer.Succeeded() And externalDefaultConsumerDiagnostics.length = 0 And Contains(externalDefaultConsumerC, "acme_native_defaults(7, 1, 1.5"), "a source-free consumer materializes defaults published by an external function")
+
 Local externStruct:TCompilerResult = TBlitzMaxCompiler.Compile("/sdk/mod/acme.mod/native.mod/native.bmx", "SuperStrict~nModule acme.native~nExtern~nStruct SNativeStats~nField count:Int~nField bytes:ULongInt~nEnd Struct~nFunction FillStats(stats:SNativeStats Var)=~qacme_fill_stats~q~nEnd Extern", resolver, TestOptions())
 Local externStructDiagnostics:TCompilerDiagnostic[]
 Local externStructHeader:String = TBlitzMaxCompiler.EmitRuntimeHeader(externStruct, externStructDiagnostics)
