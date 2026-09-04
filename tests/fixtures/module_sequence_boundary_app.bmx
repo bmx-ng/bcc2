@@ -5,7 +5,49 @@ Framework BRL.StandardIO
 Import BRL.Sequence
 Import Bcc2SequenceBoundaryTest.Functions
 
+Type TSequenceBoundaryMarker
+	Field value:Int
+End Type
+
+Interface ISequenceBoundaryMarker
+	Method Value:Int()
+End Interface
+
+Type TSequenceBoundaryInterfaceMarker Implements ISequenceBoundaryMarker
+	Field value:Int
+
+	Method Value:Int()
+		Return value
+	End Method
+End Type
+
+Struct SSequenceBoundaryPoint
+	Field x:Int
+End Struct
+
+Enum ESequenceBoundaryValue
+	First
+	Second
+End Enum
+
 Local values:Int[] = [1, 2, 3, 4, 5, 6, 7, 8]
+
+' Imported generic constructors must match arrays whose element identity is
+' owned by the consuming application rather than the defining module.
+Local marker:TSequenceBoundaryMarker = New TSequenceBoundaryMarker
+marker.value = 11
+If New Sequence<TSequenceBoundaryMarker>([marker]).FirstOrNone().Value() <> marker Then Throw "local Type array constructor failed"
+
+Local interfaceMarker:TSequenceBoundaryInterfaceMarker = New TSequenceBoundaryInterfaceMarker
+interfaceMarker.value = 13
+Local interfaceValue:ISequenceBoundaryMarker = interfaceMarker
+If New Sequence<ISequenceBoundaryMarker>([interfaceValue]).FirstOrNone().Value().Value() <> 13 Then Throw "local Interface array constructor failed"
+
+Local point:SSequenceBoundaryPoint
+point.x = 17
+If New Sequence<SSequenceBoundaryPoint>([point]).FirstOrNone().Value().x <> 17 Then Throw "local Struct array constructor failed"
+
+If New Sequence<ESequenceBoundaryValue>([ESequenceBoundaryValue.Second]).FirstOrNone().Value() <> ESequenceBoundaryValue.Second Then Throw "local Enum array constructor failed"
 
 Local directFree:Long = Sequence<Int>.FromArray(values).Filter(ModuleSequenceEven).Map<Int>(ModuleSequenceTriple).Fold<Long>(Long(0), ModuleSequenceAdd)
 If directFree <> 60 Then Throw "module-import free Function pipeline failed"
