@@ -1334,6 +1334,12 @@ Check(arrayEachInDiagnostics.length = 0, "runtime backend emits managed Array Ea
 Check(Contains(arrayEachInC, "BBARRAY bmx_tmp_") And Contains(arrayEachInC, " = bmx_fn0_MakeValues();") And Contains(arrayEachInC, "BBUINT bmx_tmp_") And Contains(arrayEachInC, "< (BBUINT)bmx_tmp_") And Contains(arrayEachInC, "BBARRAYDATA("), "runtime C evaluates the collection once and iterates with hidden unsigned index storage")
 Check(Contains(arrayEachInC, "BBSTRING bmx_") And Contains(arrayEachInC, "BBARRAY bmx_") And Contains(arrayEachInC, "goto bmx_loop0_continue;") And Contains(arrayEachInC, "goto bmx_loop0_exit;"), "runtime C uses typed element cells and the shared loop-control contract")
 
+Local incompatibleTypedArrayEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("incompatible-typed-array-eachin.bmx", "SuperStrict~nType TFoo~nEnd Type~nType TBar~nEnd Type~nLocal values:TFoo[]=[New TFoo]~nFor Local value:TBar=EachIn values~nNext", resolver, TestOptions())
+Check(HasLanguageDiagnostic(incompatibleTypedArrayEachIn, "BMX3339"), "typed Array EachIn rejects unrelated object Types during semantic analysis: " + CompilerDiagnosticSummary(incompatibleTypedArrayEachIn))
+
+Local relatedTypedArrayEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("related-typed-array-eachin.bmx", "SuperStrict~nType TBase~nEnd Type~nType TDerived Extends TBase~nEnd Type~nLocal values:TBase[]=[New TDerived]~nFor Local value:TDerived=EachIn values~nNext", resolver, TestOptions())
+Check(relatedTypedArrayEachIn.Succeeded(), "typed Array EachIn retains production-compatible related downcasts")
+
 Local convertedArrayEachInSource:String = "SuperStrict~nLocal bytes:Byte[] = [1, 2, 255]~nLocal widened:Int~nFor Local value:Int = EachIn bytes~nwidened :+ value~nNext~nLocal integers:Int[] = [257, 258, 511]~nLocal narrowed:Int~nFor Local value:Byte = EachIn integers~nnarrowed :+ value~nNext"
 Local convertedArrayEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("converted-array-eachin.bmx", convertedArrayEachInSource, resolver, TestOptions())
 Check(convertedArrayEachIn.Succeeded(), "managed numeric Array EachIn applies ordinary assignment conversions to loop variables")
