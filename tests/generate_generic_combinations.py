@@ -116,6 +116,11 @@ MODULE_BOUNDARY_DIMENSIONS = {
     "shape": ("direct", "nested", "pair"),
 }
 
+IMPORTED_CONSTRUCTOR_ARRAY_DIMENSIONS = {
+    "payload": ("typed-object", "interface", "struct", "enum", "nested-generic"),
+    "shape": ("vector", "jagged", "ranked"),
+}
+
 LIFECYCLE_DIMENSIONS = {
     "payload": ("string", "array", "typed-object", "struct", "closure"),
     "initialization": ("default", "explicit", "reassigned"),
@@ -1411,6 +1416,26 @@ Type TBoundaryPair<K, V>
 \tField second:V
 End Type
 
+Type TBoundaryArrayConstructor<T>
+\tField values:T[]
+\tMethod New(items:T[])
+\t\tvalues = items
+\tEnd Method
+\tMethod First:T()
+\t\tReturn values[0]
+\tEnd Method
+End Type
+
+Type TBoundaryRankedArrayConstructor<T>
+\tField values:T[,]
+\tMethod New(items:T[,])
+\t\tvalues = items
+\tEnd Method
+\tMethod Read:T(x:Int, y:Int)
+\t\tReturn values[x, y]
+\tEnd Method
+End Type
+
 Type TBoundaryBase<T>
 \tField value:T
 \tMethod New(item:T)
@@ -1563,6 +1588,110 @@ Import {module_name}
 Local carrier:{carrier_type} = {carrier_value}
 {api_source}
 {shape_assertion}Local result:{payload_type} = {result_expression}
+{assertion}
+Print "generic-combination-ok:{case_id}"
+"""
+
+
+def imported_constructor_array_payload_source(payload: str) -> tuple[str, str, str]:
+    if payload == "typed-object":
+        return (
+            """Type TLocalConstructorPayload
+\tField value:Int
+End Type""",
+            "TLocalConstructorPayload",
+            "Local payload:TLocalConstructorPayload = New TLocalConstructorPayload\npayload.value = 41",
+        )
+    if payload == "interface":
+        return (
+            """Interface ILocalConstructorPayload
+\tMethod Value:Int()
+End Interface
+
+Type TLocalConstructorPayload Implements ILocalConstructorPayload
+\tField value:Int
+\tMethod Value:Int()
+\t\tReturn value
+\tEnd Method
+End Type""",
+            "ILocalConstructorPayload",
+            "Local concrete:TLocalConstructorPayload = New TLocalConstructorPayload\n"
+            "concrete.value = 41\n"
+            "Local payload:ILocalConstructorPayload = concrete",
+        )
+    if payload == "struct":
+        return (
+            """Struct SLocalConstructorPayload
+\tField value:Int
+End Struct""",
+            "SLocalConstructorPayload",
+            "Local payload:SLocalConstructorPayload\npayload.value = 41",
+        )
+    if payload == "enum":
+        return (
+            """Enum ELocalConstructorPayload
+\tZero
+\tExpected = 41
+End Enum""",
+            "ELocalConstructorPayload",
+            "Local payload:ELocalConstructorPayload = ELocalConstructorPayload.Expected",
+        )
+    return (
+        """Type TLocalConstructorPayload<T>
+\tField value:T
+End Type""",
+        "TLocalConstructorPayload<Int>",
+        "Local payload:TLocalConstructorPayload<Int> = New TLocalConstructorPayload<Int>\n"
+        "payload.value = 41",
+    )
+
+
+def imported_constructor_array_assertion(payload: str, expression: str, case_id: str) -> str:
+    if payload == "interface":
+        observed = f"{expression}.Value()"
+    elif payload == "enum":
+        observed = f"Int({expression})"
+    else:
+        observed = f"{expression}.value"
+    return f'If {observed} <> 41 Then Throw "{case_id}: imported constructor array payload"'
+
+
+def imported_constructor_array_application_source(
+    case_id: str, row: tuple[str, ...], module_name: str
+) -> str:
+    payload, shape = row
+    declarations, payload_type, initialization = imported_constructor_array_payload_source(payload)
+    if shape == "vector":
+        construction = (
+            f"Local owner:TBoundaryArrayConstructor<{payload_type}> = "
+            f"New TBoundaryArrayConstructor<{payload_type}>([payload])"
+        )
+        expression = "owner.First()"
+    elif shape == "jagged":
+        construction = (
+            f"Local row:{payload_type}[] = [payload]\n"
+            f"Local owner:TBoundaryArrayConstructor<{payload_type}[]> = "
+            f"New TBoundaryArrayConstructor<{payload_type}[]>([row])"
+        )
+        expression = "owner.First()[0]"
+    else:
+        construction = (
+            f"Local matrix:{payload_type}[,] = New {payload_type}[1, 1]\n"
+            "matrix[0, 0] = payload\n"
+            f"Local owner:TBoundaryRankedArrayConstructor<{payload_type}> = "
+            f"New TBoundaryRankedArrayConstructor<{payload_type}>(matrix)"
+        )
+        expression = "owner.Read(0, 0)"
+    assertion = imported_constructor_array_assertion(payload, expression, case_id)
+    return f"""SuperStrict
+
+Framework BRL.StandardIO
+Import {module_name}
+
+{declarations}
+
+{initialization}
+{construction}
 {assertion}
 Print "generic-combination-ok:{case_id}"
 """
@@ -2950,6 +3079,27 @@ def write_corpus(output: Path, seed: int) -> None:
         manifest.append(
             f"module-positive\t{case_id}\tgeneric-combination-ok:{case_id}\t"
             f"{source.as_posix()}\tfamily=module-boundary,curated-regression,{features}"
+        )
+
+    constructor_array_dimension_names = tuple(IMPORTED_CONSTRUCTOR_ARRAY_DIMENSIONS)
+    for index, row in enumerate(
+        select_pairwise(IMPORTED_CONSTRUCTOR_ARRAY_DIMENSIONS, seed + 4500007), 1
+    ):
+        case_id = f"imported-constructor-array-{index:03d}"
+        case_dir = output / case_id
+        case_dir.mkdir()
+        source = case_dir / f"{case_id}.bmx"
+        source.write_text(
+            imported_constructor_array_application_source(case_id, row, module_name),
+            encoding="utf-8",
+        )
+        features = ",".join(
+            f"{name}={value}"
+            for name, value in zip(constructor_array_dimension_names, row)
+        )
+        manifest.append(
+            f"module-positive\t{case_id}\tgeneric-combination-ok:{case_id}\t"
+            f"{source.as_posix()}\tfamily=imported-constructor-array,{features}"
         )
 
     managed_boundary_id = "regression-module-managed-conversion"
