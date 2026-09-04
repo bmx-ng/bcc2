@@ -15,6 +15,14 @@ Function HasDiagnostic:Int(diagnostics:TDiagnostic[], code:String)
 	Return False
 End Function
 
+Function DiagnosticCount:Int(diagnostics:TDiagnostic[], code:String)
+	Local count:Int
+	For Local diagnostic:TDiagnostic = EachIn diagnostics
+		If diagnostic.code = code Then count :+ 1
+	Next
+	Return count
+End Function
+
 Local unresolvedExpressionOptions:TLanguageAnalysisOptions = TLanguageAnalysisOptions.Create()
 unresolvedExpressionOptions.typeResolution = New TTypeResolutionOptions
 unresolvedExpressionOptions.typeResolution.reportUnresolvedTypes = True
@@ -1775,6 +1783,14 @@ Check(eachInLoops[0].iteration.protocolKind = EACH_IN_PROTOCOL_ITERABLE And each
 Check(eachInLoops[1].iteration.protocolKind = EACH_IN_PROTOCOL_ITERATOR And eachInLoops[1].iteration.iteratorFactory = Null And eachInLoops[1].iteration.elementType = eachInProtocolModel.BuiltinType("Int"), "direct IIterator<T> skips the iterator factory")
 Check(eachInLoops[2].iteration.protocolKind = EACH_IN_PROTOCOL_OBJECT_ENUMERATOR And eachInLoops[2].iteration.iteratorFactory.routine.name = "ObjectEnumerator" And eachInLoops[2].iteration.advance.routine.name = "HasNext" And eachInLoops[2].iteration.current.routine.name = "NextObject" And eachInLoops[2].iteration.elementType = eachInProtocolModel.BuiltinType("Object"), "legacy ObjectEnumerator publishes its complete operation set")
 Check(eachInLoops[3].iteration.protocolKind = EACH_IN_PROTOCOL_ARRAY And eachInLoops[4].iteration.protocolKind = EACH_IN_PROTOCOL_STRING And eachInLoops[5].iteration.protocolKind = EACH_IN_PROTOCOL_STATIC_ARRAY, "built-in iteration forms use the shared protocol contract")
+
+Local incompatibleEachInSource:String = "SuperStrict~nType TFoo~nEnd Type~nType TBar~nEnd Type~nLocal values:TFoo[] = [New TFoo]~nFor Local value:TBar = EachIn values~nNext~nLocal target:TBar~nFor target = EachIn values~nNext"
+Local incompatibleEachIn:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(incompatibleEachInSource, "incompatible-eachin.bmx")
+Check(DiagnosticCount(incompatibleEachIn.model.diagnostics, "BMX3339") = 2, "EachIn rejects unrelated declared and existing target Types")
+
+Local compatibleFilteredEachInSource:String = "SuperStrict~nType TBase~nEnd Type~nType TDerived Extends TBase~nEnd Type~nLocal typed:TBase[] = [New TDerived]~nFor Local derived:TDerived = EachIn typed~nNext~nLocal objects:Object[] = typed~nFor Local filtered:TDerived = EachIn objects~nNext"
+Local compatibleFilteredEachIn:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(compatibleFilteredEachInSource, "compatible-filtered-eachin.bmx")
+Check(compatibleFilteredEachIn.model.diagnostics.length = 0, "EachIn retains related downcasts and legacy Object filtering")
 
 Local deconstructEachInSource:String = "SuperStrict~nInterface IDeconstruct2<A, B>~nMethod Deconstruct(first:A Var, second:B Var)~nEnd Interface~nType TPair Implements IDeconstruct2<String, Int>~nField key:String~nField value:Int~nMethod Deconstruct(first:String Var, second:Int Var)~nfirst = key~nsecond = value~nEnd Method~nEnd Type~nLocal pairs:TPair[] = [New TPair]~nFor Local key:String, value:Int = EachIn pairs~nLocal text:String = key + value~nNext~nFor Local inferredKey, inferredValue = EachIn pairs~nLocal inferredText:String = inferredKey + inferredValue~nNext"
 Local deconstructEachInAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(deconstructEachInSource, "/sdk/mod/brl.mod/blitz.mod/blitz.bmx")
