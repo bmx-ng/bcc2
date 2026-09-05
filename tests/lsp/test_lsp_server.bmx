@@ -2036,6 +2036,17 @@ Local installedSdkSymbols:TJSONArray = TJSONArray(workspaceSymbolResponse.Get("r
 Check(FindWorkspaceSymbol(installedSdkSymbols, "TPath", "/path.mod/path.bmx") <> Null, "workspace/symbol searches installed SDK declarations with source provenance")
 server.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didClose~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///workspace/implementation-json.bmx~q}}}")
 
+Local selfAssignmentServer:TBlitzMaxLspServer = NewTestServer()
+selfAssignmentServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:75,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
+Local selfAssignmentUri:String = "file:///tmp/self-assignment-warning.bmx"
+Local selfAssignmentSource:String = "SuperStrict~nType TConfig~nField value:Int~nMethod New(value:Int)~nValue=value~nEnd Method~nEnd Type"
+responses = selfAssignmentServer.HandlePayload(DidOpenPayload(selfAssignmentUri, selfAssignmentSource))
+Local selfAssignmentPublication:TJSONObject = ObjectFrom(responses[0])
+Local selfAssignmentParams:TJSONObject = TJSONObject(selfAssignmentPublication.Get("params"))
+Local selfAssignmentDiagnostics:TJSONArray = TJSONArray(selfAssignmentParams.Get("diagnostics"))
+Local selfAssignmentDiagnostic:TJSONObject = FindProtocolDiagnostic(selfAssignmentDiagnostics, "BMX3411")
+Check(selfAssignmentDiagnostic <> Null And selfAssignmentDiagnostic.GetInteger("severity") = 2 And selfAssignmentDiagnostic.GetString("message").Contains("Did you mean 'Self.value'?"), "LSP publishes self-assignment as a warning with the field-qualification suggestion")
+
 Local renameServer:TBlitzMaxLspServer = NewTestServer()
 renameServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qid~q:80,~qmethod~q:~qinitialize~q,~qparams~q:{}}")
 renameServer.HandlePayload("{~qjsonrpc~q:~q2.0~q,~qmethod~q:~qtextDocument/didOpen~q,~qparams~q:{~qtextDocument~q:{~quri~q:~qfile:///tmp/rename-json.bmx~q,~qlanguageId~q:~qblitzmax~q,~qversion~q:1,~qtext~q:~qSuperStrict\nFunction Double:Int(value:Int)\nLocal result:Int = value * 2\nReturn result\nEnd Function~q}}}")
