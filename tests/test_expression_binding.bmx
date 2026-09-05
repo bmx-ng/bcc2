@@ -496,6 +496,19 @@ Local newReferenceAssignment:TAssignmentStatementSyntax = TAssignmentStatementSy
 Check(assignmentOperatorModel.diagnostics.length = 0 And assignmentOperatorModel.ResolvedCall(assignmentOperatorStatement).routine.name = ":=", "ordinary assignment selects a matching user-defined assignment-initialization operator")
 Check(assignmentOperatorModel.ResolvedCall(newReferenceAssignment) = Null, "assignment from an explicit New expression retains ordinary reference replacement semantics")
 
+Local selfAssignmentSource:String = "SuperStrict~nType TSelfAssignment~nField value:Int~nMethod New(value:Int)~nValue=value~nSelf.value=Self.value~nSelf.value=value~nvalue=Self.value~nEnd Method~nEnd Type~nLocal amount:Int=1~namount=amount~namount :+ amount~nLocal first:TSelfAssignment=New TSelfAssignment(1)~nLocal second:TSelfAssignment=New TSelfAssignment(2)~nfirst.value=first.value~nfirst.value=second.value~nLocal values:Int[]=[1]~nvalues[0]=values[0]"
+Local selfAssignmentAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(selfAssignmentSource, "self-assignment-warning.bmx")
+Check(DiagnosticCount(selfAssignmentAnalysis.model.diagnostics, "BMX3411") = 4, "plain Local, implicit parameter, explicit Field and stable member self-assignments receive BMX3411")
+Local parameterSelfAssignment:TDiagnostic
+For Local diagnostic:TDiagnostic = EachIn selfAssignmentAnalysis.model.diagnostics
+	If diagnostic.code = "BMX3411" And diagnostic.message.Contains("Self.value") Then parameterSelfAssignment = diagnostic; Exit
+Next
+Check(parameterSelfAssignment And parameterSelfAssignment.severity = DIAGNOSTIC_WARNING And parameterSelfAssignment.message.Contains("Did you mean 'Self.value'?"), "a parameter hiding a same-named Field receives a warning-level Self-qualified suggestion")
+
+Local overloadedSelfAssignmentSource:String = "SuperStrict~nType TOverloadedAssignment~nMethod Operator :=:TOverloadedAssignment(other:TOverloadedAssignment)~nReturn Self~nEnd Method~nEnd Type~nLocal current:TOverloadedAssignment=New TOverloadedAssignment~ncurrent=current"
+Local overloadedSelfAssignment:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(overloadedSelfAssignmentSource, "overloaded-self-assignment.bmx")
+Check(Not HasDiagnostic(overloadedSelfAssignment.model.diagnostics, "BMX3411"), "an assignment handled by Operator := is not treated as a storage self-assignment")
+
 Local genericInterfaceOverrideSource:String = "SuperStrict~nEnum EHeader~nUnknown~nEnd Enum~nInterface IMap<K,V>~nMethod TryGetValue:Int(key:K, value:V Var)~nEnd Interface~nType THashMap<K,V> Implements IMap<K,V>~nMethod TryGetValue:Int(key:K, value:V Var)~nReturn True~nEnd Method~nEnd Type~nLocal map:THashMap<String,EHeader> = New THashMap<String,EHeader>~nLocal header:EHeader~nLocal found:Int = map.TryGetValue(~qname~q, header)"
 Local genericInterfaceOverrideParse:TParseResult = TBlitzMaxParser.ParseText(genericInterfaceOverrideSource, "generic-interface-override.bmx")
 Local genericInterfaceOverrideModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(genericInterfaceOverrideParse.syntaxTree)
