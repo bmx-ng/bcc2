@@ -7,10 +7,12 @@ Framework BRL.StandardIO
 
 Import BRL.FileSystem
 Import BlitzMax.Compiler
+Import BlitzMax.Locale
 Import "bcc2_engine.bmx"
 Import "version.bmx"
 
 If AppArgs.length = 2 And AppArgs[1] = "--engine" Then
+	TLocale.ConfigureToolchain(["language", "bcc"])
 	TBcc2Engine.Run()
 	exit_(0)
 End If
@@ -20,7 +22,7 @@ Function PrintVersion()
 End Function
 
 Function Usage()
-Print "Usage: bcc [--dump-ir|--emit-c|--emit-runtime-c|--emit-runtime-header|--emit-interface|--emit-build] [-o <path>] [--build-c <relative-path>] [--build-header <relative-path>] [--build-interface <relative-path>] [--build-manifest <relative-path>] [--build-reference-root <path>] [--sdk <path>] [--module <name>] [--source-unit <relative-path>] [--application-identity <name>] [--application-source] [--debug|--release] [--no-debug-instrumentation] [--coverage] [--platform <name>] [--arch <name>] [--app-type console|gui] [--framework <module>] [--threaded|--single-threaded] [--no-runtime] <source.bmx>"
+Print "Usage: bcc [--dump-ir|--emit-c|--emit-runtime-c|--emit-runtime-header|--emit-interface|--emit-build] [-o <path>] [--build-c <relative-path>] [--build-header <relative-path>] [--build-interface <relative-path>] [--build-manifest <relative-path>] [--build-reference-root <path>] [--sdk <path>] [--locale <name>] [--module <name>] [--source-unit <relative-path>] [--application-identity <name>] [--application-source] [--debug|--release] [--no-debug-instrumentation] [--coverage] [--platform <name>] [--arch <name>] [--app-type console|gui] [--framework <module>] [--threaded|--single-threaded] [--no-runtime] <source.bmx>"
 End Function
 
 If AppArgs.length < 2 Then
@@ -45,6 +47,7 @@ Local buildInterfacePath:String
 Local buildManifestPath:String = "bcc-build.manifest"
 Local buildReferenceRootPath:String
 Local emitC:Int
+Local locale:String
 Local index:Int = 1
 While index < AppArgs.length
 	Local argument:String = AppArgs[index]
@@ -89,6 +92,10 @@ While index < AppArgs.length
 			index :+ 1
 			If index >= AppArgs.length Then Usage(); exit_(1)
 			options.sdkPath = AppArgs[index]
+		Case "--locale"
+			index :+ 1
+			If index >= AppArgs.length Then Usage(); exit_(1)
+			locale = AppArgs[index]
 		Case "--module", "-m"
 			index :+ 1
 			If index >= AppArgs.length Then Usage(); exit_(1)
@@ -184,6 +191,7 @@ If Not options.implicitRuntime And emitC > 1 And emitC <> 4 And emitC <> 5 Then
 End If
 
 options.RefreshConditionalSymbols()
+TLocale.ConfigureToolchain(["language", "bcc"], locale, options.sdkPath)
 Local result:TCompilerResult = TBlitzMaxCompiler.CompileFile(sourcePath, options)
 If options.verbose Then
 	Print "bcc timing source-load=" + result.sourceLoadMilliseconds + "ms analysis=" + result.analysisMilliseconds + "ms generic-plan=" + result.genericPlanMilliseconds + "ms lowering=" + result.loweringMilliseconds + "ms"
