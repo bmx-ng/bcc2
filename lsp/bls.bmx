@@ -6,10 +6,13 @@ SuperStrict
 Framework BRL.StandardIO
 
 Import BlitzMax.LSP
+Import BlitzMax.Locale
 Import Pub.StdC
 
+TLocale.ConfigureToolchain(["language", "bls"])
+
 If Not setbinarymode_(stdin_) Or Not setbinarymode_(stdout_) Then
-	Throw "Unable to configure byte-exact LSP standard I/O"
+	Throw TBlsMessages.StartupStandardIoConfigurationFailed().Render()
 End If
 
 Local io:TCStandardIO = New TCStandardIO
