@@ -3,4 +3,4 @@
 
 SuperStrict
 
-Const BCC_VERSION:String = "1.01"
+Const BCC_VERSION:String = "1.02"
