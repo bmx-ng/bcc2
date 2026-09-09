@@ -3145,6 +3145,11 @@ Print "generic-combination-ok:{managed_boundary_id}"
         case_dir = output / case_id
         case_dir.mkdir()
         source = case_dir / f"{case_id}.bmx"
+        # Negative language cases must not inherit the SDK's implicit default
+        # framework. Otherwise an unrelated stale or broken module can fail
+        # first and make the harness misreport the expected diagnostic as lost.
+        if "\nFramework " not in text:
+            text = text.replace("SuperStrict\n", "SuperStrict\nFramework BRL.Blitz\n", 1)
         source.write_text(text + "\n", encoding="utf-8")
         manifest.append(f"negative\t{case_id}\t{diagnostic}\t{source.as_posix()}\tcurated-negative")
 
