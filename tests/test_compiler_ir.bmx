@@ -2180,6 +2180,9 @@ Check(Contains(sourceClassCollisionC, "struct bmx_cls0_TNode_obj *") And Not Con
 Local overloadNull:TCompilerResult = TBlitzMaxCompiler.Compile("overload-null.bmx", "SuperStrict~nType TNullComparable~nMethod Operator =:Int(other:Object)~nReturn other=Null~nEnd Method~nEnd Type~nLocal value:TNullComparable=New TNullComparable~nLocal missing:Int=value=Null", resolver, TestOptions())
 Check(overloadNull.Succeeded() And Contains(TCompilerIrDumper.Dump(overloadNull.ir), "managed-default Object : Object") And Not HasCompilerDiagnostic(overloadNull, "BMXC1010"), "a selected overload lowers an explicit Null argument using its value parameter's managed type")
 
+Local incompatibleObjectComparison:TCompilerResult = TBlitzMaxCompiler.Compile("incompatible-object-comparison.bmx", "SuperStrict~nType TFoo~nEnd Type~nLocal value:TFoo=New TFoo~nLocal differs:Int=value<>123", resolver, TestOptions())
+Check(Not incompatibleObjectComparison.Succeeded() And HasLanguageDiagnostic(incompatibleObjectComparison, "BMX3305"), "object and numeric comparison is rejected during semantic analysis before IR lowering")
+
 Local stringCompound:TCompilerResult = TBlitzMaxCompiler.Compile("string-compound.bmx", "SuperStrict~nType TPathNode~nField targetText:String~nEnd Type~nType TPathRoot~nField node:TPathNode=New TPathNode~nEnd Type~nLocal path:String=~qroot~q~npath:+~q/~q~nLocal count:Int=12~npath:+(count/2)~nGlobal suffix:String=~q.txt~q~nsuffix:+~q.bak~q~nLocal node:TPathNode=New TPathNode~nnode.targetText:+~qmodule~q~nLocal root:TPathRoot=New TPathRoot~nroot.node.targetText:+~qnested~q", resolver, TestOptions())
 Local stringCompoundDump:String = TCompilerIrDumper.Dump(stringCompound.ir)
 Local stringCompoundDiagnostics:TCompilerDiagnostic[]
