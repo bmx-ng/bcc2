@@ -463,6 +463,19 @@ Local sumExpression:TBinaryExpressionSyntax = TBinaryExpressionSyntax(sumDeclara
 Check(operatorModel.ResolvedCall(sumExpression).routine.name = "+" And operatorModel.ExpressionType(sumExpression).DisplayName() = "SAmount", "binary operator binding")
 Check(TBoundBinaryExpression(operatorModel.BoundExpression(sumExpression)).resolvedCall.routine.name = "+", "bound binary operation retains user-defined operator call")
 
+Local incompatibleComparisonSource:String = "SuperStrict~nType TComparisonValue~nEnd Type~nLocal value:TComparisonValue=New TComparisonValue~nLocal first:Int=value<>123~nLocal second:Int=123=value~nLocal third:Int=value<123"
+Local incompatibleComparison:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(incompatibleComparisonSource, "incompatible-binary-comparison.bmx")
+Check(DiagnosticCount(incompatibleComparison.model.diagnostics, "BMX3305") = 3, "built-in comparisons reject object and numeric operands in either order")
+Check(incompatibleComparison.model.diagnostics[0].message.Contains("Operator '<>'") And incompatibleComparison.model.diagnostics[0].message.Contains("TComparisonValue") And incompatibleComparison.model.diagnostics[0].message.Contains("Int"), "incompatible binary comparison identifies the operator and both operand types")
+
+Local validComparisonSource:String = "SuperStrict~nType TComparisonBase~nEnd Type~nType TComparisonDerived Extends TComparisonBase~nEnd Type~nEnum EComparisonValue~nFirst~nSecond~nEnd Enum~nLocal base:TComparisonBase=New TComparisonBase~nLocal derived:TComparisonDerived=New TComparisonDerived~nLocal same:Int=base=derived~nLocal missing:Int=derived<>Null~nLocal numeric:Int=1<2.0~nLocal text:Int=~q1~q=1~nLocal ordered:Int=EComparisonValue.First<EComparisonValue.Second"
+Local validComparison:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(validComparisonSource, "valid-binary-comparison.bmx")
+Check(Not HasDiagnostic(validComparison.model.diagnostics, "BMX3305"), "compatible numeric, String, reference and Null comparisons remain valid")
+
+Local overloadedComparisonSource:String = "SuperStrict~nType TOverloadedComparison~nMethod Operator <>:Int(other:Int)~nReturn True~nEnd Method~nEnd Type~nLocal value:TOverloadedComparison=New TOverloadedComparison~nLocal differs:Int=value<>123"
+Local overloadedComparison:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(overloadedComparisonSource, "overloaded-binary-comparison.bmx")
+Check(Not HasDiagnostic(overloadedComparison.model.diagnostics, "BMX3305"), "a matching user-defined comparison operator takes precedence over built-in compatibility checks")
+
 Local setterOnlySource:String = "SuperStrict~nType TSetterOnly~nMethod Operator[]=(first:String, second:String, value:String)~nEnd Method~nEnd Type~nLocal target:TSetterOnly = New TSetterOnly~ntarget[~qfoo~q, ~qbar~q] = ~qbaz~q"
 Local setterOnlyParse:TParseResult = TBlitzMaxParser.ParseText(setterOnlySource, "setter-only-index-binding.bmx")
 Local setterOnlyModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(setterOnlyParse.syntaxTree)
