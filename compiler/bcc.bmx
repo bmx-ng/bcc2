@@ -22,7 +22,7 @@ Function PrintVersion()
 End Function
 
 Function Usage()
-Print "Usage: bcc [--dump-ir|--emit-c|--emit-runtime-c|--emit-runtime-header|--emit-interface|--emit-build] [-o <path>] [--build-c <relative-path>] [--build-header <relative-path>] [--build-interface <relative-path>] [--build-manifest <relative-path>] [--build-reference-root <path>] [--sdk <path>] [--locale <name>] [--module <name>] [--source-unit <relative-path>] [--application-identity <name>] [--application-source] [--debug|--release] [--no-debug-instrumentation] [--coverage] [--platform <name>] [--arch <name>] [--app-type console|gui] [--framework <module>] [--threaded|--single-threaded] [--no-runtime] <source.bmx>"
+Print "Usage: bcc [--dump-ir|--emit-c|--emit-runtime-c|--emit-runtime-header|--emit-interface|--emit-build] [-o <path>] [--build-c <relative-path>] [--build-header <relative-path>] [--build-interface <relative-path>] [--build-manifest <relative-path>] [--build-reference-root <path>] [--sdk <path>] [--locale <name>] [--module <name>] [--source-unit <relative-path>] [--application-identity <name>] [--application-source] [--debug|--release] [--no-debug-instrumentation] [--coverage] [-w|--warn-argument-casts] [--platform <name>] [--arch <name>] [--app-type console|gui] [--framework <module>] [--threaded|--single-threaded] [--no-runtime] <source.bmx>"
 End Function
 
 If AppArgs.length < 2 Then
@@ -121,6 +121,8 @@ While index < AppArgs.length
 			options.debugInstrumentation = False
 		Case "--coverage", "-cov"
 			options.coverageInstrumentation = True
+		Case "--warn-argument-casts", "-w"
+			options.warnArgumentCasts = True
 		Case "--platform", "-p"
 			index :+ 1
 			If index >= AppArgs.length Then Usage(); exit_(1)
