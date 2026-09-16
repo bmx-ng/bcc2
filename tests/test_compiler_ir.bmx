@@ -2183,6 +2183,16 @@ Check(overloadNull.Succeeded() And Contains(TCompilerIrDumper.Dump(overloadNull.
 Local incompatibleObjectComparison:TCompilerResult = TBlitzMaxCompiler.Compile("incompatible-object-comparison.bmx", "SuperStrict~nType TFoo~nEnd Type~nLocal value:TFoo=New TFoo~nLocal differs:Int=value<>123", resolver, TestOptions())
 Check(Not incompatibleObjectComparison.Succeeded() And HasLanguageDiagnostic(incompatibleObjectComparison, "BMX3305"), "object and numeric comparison is rejected during semantic analysis before IR lowering")
 
+Local narrowingOperatorSource:String = "SuperStrict~nType TNumericOperator~nMethod Operator <>:Int(value:Int)~nReturn True~nEnd Method~nEnd Type~nLocal measured:Double=10.5~nLocal target:TNumericOperator=New TNumericOperator~nLocal differs:Int=target<>measured"
+Local strictNarrowingOperator:TCompilerResult = TBlitzMaxCompiler.Compile("strict-narrowing-operator.bmx", narrowingOperatorSource, resolver, TestOptions())
+Check(Not strictNarrowingOperator.Succeeded() And HasLanguageDiagnostic(strictNarrowingOperator, "BMX3305"), "the compiler rejects an implicit narrowing conversion to an operator parameter by default")
+Local warnedNarrowingOperatorOptions:TCompilerOptions = TestOptions()
+warnedNarrowingOperatorOptions.warnArgumentCasts = True
+Local warnedNarrowingOperator:TCompilerResult = TBlitzMaxCompiler.Compile("warned-narrowing-operator.bmx", narrowingOperatorSource, resolver, warnedNarrowingOperatorOptions)
+Check(warnedNarrowingOperator.Succeeded() And HasLanguageDiagnostic(warnedNarrowingOperator, "BMX3412"), "the compiler warning option permits and diagnoses an implicit narrowing operator argument")
+Local explicitNarrowingOperator:TCompilerResult = TBlitzMaxCompiler.Compile("explicit-narrowing-operator.bmx", narrowingOperatorSource.Replace("target<>measured", "target<>Int(measured)"), resolver, TestOptions())
+Check(explicitNarrowingOperator.Succeeded() And Not HasLanguageDiagnostic(explicitNarrowingOperator, "BMX3412"), "an explicit numeric cast satisfies the operator parameter without a warning")
+
 Local stringCompound:TCompilerResult = TBlitzMaxCompiler.Compile("string-compound.bmx", "SuperStrict~nType TPathNode~nField targetText:String~nEnd Type~nType TPathRoot~nField node:TPathNode=New TPathNode~nEnd Type~nLocal path:String=~qroot~q~npath:+~q/~q~nLocal count:Int=12~npath:+(count/2)~nGlobal suffix:String=~q.txt~q~nsuffix:+~q.bak~q~nLocal node:TPathNode=New TPathNode~nnode.targetText:+~qmodule~q~nLocal root:TPathRoot=New TPathRoot~nroot.node.targetText:+~qnested~q", resolver, TestOptions())
 Local stringCompoundDump:String = TCompilerIrDumper.Dump(stringCompound.ir)
 Local stringCompoundDiagnostics:TCompilerDiagnostic[]

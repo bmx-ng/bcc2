@@ -614,11 +614,33 @@ Local narrowingArgumentSource:String = "SuperStrict~nFunction WideValue:Double()
 Local narrowingArgumentParse:TParseResult = TBlitzMaxParser.ParseText(narrowingArgumentSource, "numeric-narrowing-argument.bmx")
 Local narrowingArgumentModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(narrowingArgumentParse.syntaxTree)
 TExpressionBinder.Bind(narrowingArgumentModel)
-Check(narrowingArgumentModel.diagnostics.length = 0, "ordinary value parameters accept BlitzMax numeric narrowing")
-Local narrowingArgumentStatement:TCallStatementSyntax = TCallStatementSyntax(narrowingArgumentParse.syntaxTree.root.members[narrowingArgumentParse.syntaxTree.root.members.length - 1])
+Check(HasDiagnostic(narrowingArgumentModel.diagnostics, "BMX3302"), "ordinary value parameters reject implicit numeric narrowing by default")
+Local narrowingFailureDiagnostic:TDiagnostic
+For Local diagnostic:TDiagnostic = EachIn narrowingArgumentModel.diagnostics
+	If diagnostic.code = "BMX3302" Then narrowingFailureDiagnostic = diagnostic; Exit
+Next
+Check(narrowingFailureDiagnostic And narrowingFailureDiagnostic.message.Contains(Chr(10) + "Argument types:") And Not narrowingFailureDiagnostic.message.Contains("~~nArgument types:"), "multiline overload diagnostics contain a real newline rather than a visible BlitzMax escape")
+
+Local warnedNarrowingArgumentParse:TParseResult = TBlitzMaxParser.ParseText(narrowingArgumentSource, "warned-numeric-narrowing-argument.bmx")
+Local warnedNarrowingArgumentModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(warnedNarrowingArgumentParse.syntaxTree)
+TExpressionBinder.Bind(warnedNarrowingArgumentModel, Null, True)
+Check(DiagnosticCount(warnedNarrowingArgumentModel.diagnostics, "BMX3412") = 1 And warnedNarrowingArgumentModel.diagnostics[0].severity = DIAGNOSTIC_WARNING, "warning mode permits numeric narrowing and reports the selected argument conversion")
+Local narrowingArgumentStatement:TCallStatementSyntax = TCallStatementSyntax(warnedNarrowingArgumentParse.syntaxTree.root.members[warnedNarrowingArgumentParse.syntaxTree.root.members.length - 1])
 Local narrowingArgumentCall:TCallExpressionSyntax = TCallExpressionSyntax(narrowingArgumentStatement.expression)
-Local narrowingArgumentBound:TBoundCallExpression = TBoundCallExpression(narrowingArgumentModel.BoundExpression(narrowingArgumentCall))
-Check(narrowingArgumentModel.ResolvedCall(narrowingArgumentCall).routine.parameters.length = 6 And TBoundConversionExpression(narrowingArgumentBound.arguments[3]).conversionKind = CONVERSION_NUMERIC_NARROWING, "overload ranking prefers the applicable defaulted shape and retains Double-to-Float argument narrowing explicitly")
+Local narrowingArgumentBound:TBoundCallExpression = TBoundCallExpression(warnedNarrowingArgumentModel.BoundExpression(narrowingArgumentCall))
+Check(warnedNarrowingArgumentModel.ResolvedCall(narrowingArgumentCall).routine.parameters.length = 6 And TBoundConversionExpression(narrowingArgumentBound.arguments[3]).conversionKind = CONVERSION_NUMERIC_NARROWING, "warning mode prefers the applicable defaulted shape and retains Double-to-Float argument narrowing explicitly")
+
+Local narrowingBoundarySource:String = "SuperStrict~nFunction AcceptInt:Int(value:Int)~nReturn value~nEnd Function~nType TNarrowingTarget~nMethod New(value:Int)~nEnd Method~nMethod Accept:Int(value:Int)~nReturn value~nEnd Method~nMethod Operator <>:Int(value:Int)~nReturn True~nEnd Method~nEnd Type~nLocal measured:Double = 10.5~nLocal target:TNarrowingTarget = New TNarrowingTarget(measured)~nAcceptInt(measured)~ntarget.Accept(measured)~nLocal differs:Int = target <> measured"
+Local strictNarrowingBoundaries:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(narrowingBoundarySource, "strict-narrowing-boundaries.bmx")
+Check(DiagnosticCount(strictNarrowingBoundaries.model.diagnostics, "BMX3302") = 4 And DiagnosticCount(strictNarrowingBoundaries.model.diagnostics, "BMX3305") = 1, "functions, methods, constructors, and operators all reject implicit numeric narrowing by default")
+Local warnedNarrowingOptions:TLanguageAnalysisOptions = TLanguageAnalysisOptions.Create()
+warnedNarrowingOptions.warnArgumentCasts = True
+Local warnedNarrowingBoundaries:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(narrowingBoundarySource, "warned-narrowing-boundaries.bmx", warnedNarrowingOptions)
+Check(warnedNarrowingBoundaries.Succeeded() And DiagnosticCount(warnedNarrowingBoundaries.model.diagnostics, "BMX3412") = 4, "warning mode consistently permits narrowing across every routine-call boundary")
+
+Local safeArgumentConversionSource:String = "SuperStrict~nFunction AcceptInt:Int(value:Int)~nReturn value~nEnd Function~nLocal exact:Int = 7~nLocal small:Byte = 8~nLocal measured:Double = 9.5~nAcceptInt(exact)~nAcceptInt(small)~nAcceptInt(Int(measured))"
+Local safeArgumentConversions:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(safeArgumentConversionSource, "safe-argument-conversions.bmx", warnedNarrowingOptions)
+Check(safeArgumentConversions.model.diagnostics.length = 0, "exact, widening, and explicitly cast arguments remain valid without warnings")
 
 Local mixedNumericOverloadSource:String = "SuperStrict~nFunction Compare:Int(expected:Int,actual:Int)~nReturn 1~nEnd Function~nFunction Compare:Int(expected:ULong,actual:ULong)~nReturn 2~nEnd Function~nFunction Compare:Int(expected:Float,actual:Float,delta:Float=0)~nReturn 3~nEnd Function~nLocal index:Int=3~nLocal actual:ULong=9~nLocal result:Int=Compare(index*index,actual)"
 Local mixedNumericOverloadAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(mixedNumericOverloadSource, "mixed-numeric-overload.bmx")
@@ -890,11 +912,14 @@ Local realDoubleSource:String = "SuperStrict~nFunction NeedFloat(value:Float)~nE
 Local realDoubleParse:TParseResult = TBlitzMaxParser.ParseText(realDoubleSource, "genuine-double-expression.bmx")
 Local realDoubleModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(realDoubleParse.syntaxTree)
 TExpressionBinder.Bind(realDoubleModel)
-Check(realDoubleModel.diagnostics.length = 0, "ordinary value arguments permit a genuine Double expression to narrow to Float")
-Local realDoubleStatement:TCallStatementSyntax = TCallStatementSyntax(realDoubleParse.syntaxTree.root.members[realDoubleParse.syntaxTree.root.members.length - 1])
+Check(HasDiagnostic(realDoubleModel.diagnostics, "BMX3302"), "genuine Double expressions do not silently narrow to Float parameters")
+Local warnedRealDoubleParse:TParseResult = TBlitzMaxParser.ParseText(realDoubleSource, "warned-genuine-double-expression.bmx")
+Local warnedRealDoubleModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(warnedRealDoubleParse.syntaxTree)
+TExpressionBinder.Bind(warnedRealDoubleModel, Null, True)
+Local realDoubleStatement:TCallStatementSyntax = TCallStatementSyntax(warnedRealDoubleParse.syntaxTree.root.members[warnedRealDoubleParse.syntaxTree.root.members.length - 1])
 Local realDoubleCall:TCallExpressionSyntax = TCallExpressionSyntax(realDoubleStatement.expression)
-Local boundRealDoubleCall:TBoundCallExpression = TBoundCallExpression(realDoubleModel.BoundExpression(realDoubleCall))
-Check(TBoundConversionExpression(boundRealDoubleCall.arguments[0]).conversionKind = CONVERSION_NUMERIC_NARROWING, "Double-to-Float argument narrowing remains explicit in the bound model")
+Local boundRealDoubleCall:TBoundCallExpression = TBoundCallExpression(warnedRealDoubleModel.BoundExpression(realDoubleCall))
+Check(TBoundConversionExpression(boundRealDoubleCall.arguments[0]).conversionKind = CONVERSION_NUMERIC_NARROWING, "permitted Double-to-Float argument narrowing remains explicit in the bound model")
 
 Local objectReferenceSource:String = "SuperStrict~nType TObjectStream~nEnd Type~nFunction OpenStream:TObjectStream(url:Object, readable:Int = True, writeMode:Int = 0)~nReturn Null~nEnd Function~nLocal path:String = ~qdata.txt~q~nLocal opened:TObjectStream = OpenStream(path, True, 0)~nLocal values:Int[]~nLocal arrayOpened:TObjectStream = OpenStream(values)~nLocal url:Object~nLocal casted:TObjectStream = TObjectStream(url)"
 Local objectReferenceParse:TParseResult = TBlitzMaxParser.ParseText(objectReferenceSource, "object-reference-conversions.bmx")
@@ -992,12 +1017,12 @@ Check(invalidVarPtrModel.diagnostics.length = 1 And invalidVarPtrModel.diagnosti
 
 Local narrowingParse:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nFunction NeedInt(value:Int)~nEnd Function~nLocal wide:Double~nNeedInt(wide)", "invalid-narrowing.bmx")
 Local narrowingModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(narrowingParse.syntaxTree)
-TExpressionBinder.Bind(narrowingModel)
-Check(narrowingModel.diagnostics.length = 0, "ordinary value arguments permit numeric narrowing")
+TExpressionBinder.Bind(narrowingModel, Null, True)
+Check(DiagnosticCount(narrowingModel.diagnostics, "BMX3412") = 1, "warning mode diagnoses permitted numeric narrowing")
 Local narrowingStatement:TCallStatementSyntax = TCallStatementSyntax(narrowingParse.syntaxTree.root.members[narrowingParse.syntaxTree.root.members.length - 1])
 Local narrowingCall:TCallExpressionSyntax = TCallExpressionSyntax(narrowingStatement.expression)
 Local boundNarrowingCall:TBoundCallExpression = TBoundCallExpression(narrowingModel.BoundExpression(narrowingCall))
-Check(TBoundConversionExpression(boundNarrowingCall.arguments[0]).conversionKind = CONVERSION_NUMERIC_NARROWING, "wide numeric arguments retain an explicit narrowing conversion")
+Check(TBoundConversionExpression(boundNarrowingCall.arguments[0]).conversionKind = CONVERSION_NUMERIC_NARROWING, "warning-mode numeric arguments retain an explicit narrowing conversion")
 
 Local uncalledSource:String = "SuperStrict~nFunction Show(value:String)~nEnd Function~nType TThing~nMethod Something:Int()~nReturn 1~nEnd Method~nEnd Type~nLocal thing:TThing = New TThing~nShow thing.Something"
 Local uncalledParse:TParseResult = TBlitzMaxParser.ParseText(uncalledSource, "uncalled-method.bmx")
