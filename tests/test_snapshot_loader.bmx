@@ -182,11 +182,17 @@ modeResolver.AddInclude("mode-grandchild.bmx", "Function GrandchildProcedure()~n
 Local superModeAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("super-root.bmx", "SuperStrict~nInclude ~qmode-child.bmx~q", modeResolver, options)
 Local childProcedure:TSymbol = superModeAnalysis.model.globalScope.LookupLocal("ChildProcedure")[0]
 Local grandchildProcedure:TSymbol = superModeAnalysis.model.globalScope.LookupLocal("GrandchildProcedure")[0]
-Check(superModeAnalysis.snapshot.documents[1].tree.root.sourceMode = SOURCE_MODE_STRICT, "included syntax retains its independently parsed implicit mode")
+Check(superModeAnalysis.snapshot.documents[1].tree.root.sourceMode = SOURCE_MODE_SUPERSTRICT, "included syntax uses the automatic SuperStrict default")
 Check(superModeAnalysis.snapshot.documents[1].effectiveSourceMode = SOURCE_MODE_SUPERSTRICT And superModeAnalysis.snapshot.documents[2].effectiveSourceMode = SOURCE_MODE_SUPERSTRICT, "direct and transitive includes inherit the root SuperStrict mode")
 Check(childProcedure.declaredType = superModeAnalysis.model.BuiltinType("Void") And grandchildProcedure.declaredType = superModeAnalysis.model.BuiltinType("Void"), "included routines use inherited SuperStrict return defaults")
 Local strictModeAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("strict-root.bmx", "Strict~nInclude ~qmode-child.bmx~q", modeResolver, options)
 Check(strictModeAnalysis.model.globalScope.LookupLocal("ChildProcedure")[0].declaredType = strictModeAnalysis.model.BuiltinType("Int"), "included routines retain Strict implicit Int returns under a Strict root")
+Local noAutoModeOptions:TCompilationSnapshotOptions = New TCompilationSnapshotOptions
+noAutoModeOptions.targetPlatform = options.targetPlatform
+noAutoModeOptions.conditionalSymbols = options.conditionalSymbols[..]
+noAutoModeOptions.noAutoSuperStrict = True
+Local noAutoModeAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("no-auto-root.bmx", "Include ~qmode-child.bmx~q", modeResolver, noAutoModeOptions)
+Check(noAutoModeAnalysis.snapshot.rootDocument.tree.root.sourceMode = SOURCE_MODE_STRICT And noAutoModeAnalysis.model.globalScope.LookupLocal("ChildProcedure")[0].declaredType = noAutoModeAnalysis.model.BuiltinType("Int"), "-nas gives an undeclared root and its includes Strict return defaults")
 
 Local ownedSourceOptions:TCompilationSnapshotOptions = New TCompilationSnapshotOptions
 ownedSourceOptions.targetPlatform = options.targetPlatform

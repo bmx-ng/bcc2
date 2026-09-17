@@ -27,7 +27,7 @@ Check(result.syntaxTree <> Null, "parse tree")
 Check(result.syntaxTree.source.path = "hello.bmx", "parse source path")
 Check(result.syntaxTree.root.endOfFileToken.span.start = 13, "EOF span")
 Check(result.syntaxTree.diagnostics.length = 0, "empty parser bootstrap diagnostics")
-Check(result.syntaxTree.root.sourceMode = SOURCE_MODE_STRICT And result.syntaxTree.root.sourceModeDeclaration = Null, "implicit Strict source mode")
+Check(result.syntaxTree.root.sourceMode = SOURCE_MODE_SUPERSTRICT And result.syntaxTree.root.sourceModeDeclaration = Null, "implicit SuperStrict source mode")
 
 Local nativeParamSizeParse:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nLocal lp:Size_T=SizeOf LParam Null~nLocal wp:Size_T=SizeOf WParam Null", "native-param-sizeof.bmx")
 Check(nativeParamSizeParse.syntaxTree.diagnostics.length = 0, "LParam and WParam are valid SizeOf type operands")
@@ -67,6 +67,14 @@ Check(builtinCastAssignmentParse.syntaxTree.diagnostics.length = 0 And builtinCa
 Local modeResult:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nPrint ~qtyped~q", "mode.bmx")
 Check(modeResult.syntaxTree.root.sourceMode = SOURCE_MODE_SUPERSTRICT, "explicit SuperStrict source mode")
 Check(modeResult.syntaxTree.root.sourceModeDeclaration.modeToken.text = "SuperStrict", "source mode declaration syntax")
+Local automaticMode:TParseResult = TBlitzMaxParser.ParseText("Local value:Int", "automatic-mode.bmx")
+Check(automaticMode.syntaxTree.root.sourceMode = SOURCE_MODE_SUPERSTRICT And Not automaticMode.syntaxTree.root.sourceModeDeclaration, "source without a mode declaration defaults to SuperStrict")
+Local disabledAutomaticMode:TParseResult = TBlitzMaxParser.ParseText("Local value:Int", "no-automatic-mode.bmx", SOURCE_MODE_STRICT)
+Check(disabledAutomaticMode.syntaxTree.root.sourceMode = SOURCE_MODE_STRICT, "-nas selects the Strict fallback")
+Local explicitStrictMode:TParseResult = TBlitzMaxParser.ParseText("Strict~nLocal value:Int", "explicit-strict-mode.bmx")
+Check(explicitStrictMode.syntaxTree.root.sourceMode = SOURCE_MODE_STRICT, "explicit Strict overrides automatic SuperStrict")
+Local explicitSuperStrictMode:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nLocal value:Int", "explicit-superstrict-mode.bmx", SOURCE_MODE_STRICT)
+Check(explicitSuperStrictMode.syntaxTree.root.sourceMode = SOURCE_MODE_SUPERSTRICT, "explicit SuperStrict overrides -nas")
 
 Local dependencySource:String = "Framework brl.standardio~nImport brl.filesystem~nImport ~qhelper.bmx~q~nImport ~qglue.c~q~nInclude ~qparts/shared.bmx~q"
 Local dependencyResult:TParseResult = TBlitzMaxParser.ParseText(dependencySource, "dependencies.bmx")
