@@ -204,6 +204,8 @@ Type TBcc2Engine
 					options.coverageInstrumentation = True
 				Case "--warn-argument-casts", "-w"
 					options.warnArgumentCasts = True
+				Case "--no-auto-superstrict", "-nas"
+					options.noAutoSuperStrict = True
 				Case "--platform", "-p"
 					index :+ 1
 					If index >= arguments.length Then Return Failure(output, "Missing platform.")

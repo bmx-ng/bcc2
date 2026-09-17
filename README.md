@@ -52,6 +52,13 @@ representation, and native code generation as separate stages. The language
 server shares the parser and semantic model with the compiler rather than
 maintaining an independent interpretation of the language.
 
+As with production bcc, a source file without an explicit `Strict` or
+`SuperStrict` declaration defaults to `SuperStrict`. Pass `-nas` to bmk2 (or
+`-nas`/`--no-auto-superstrict` to bcc2 directly) to use `Strict` for such files.
+An explicit source-mode declaration always takes precedence. BLS uses the same
+default; workspaces built with `-nas` can set `noAutoSuperStrict: true` in their
+language-server configuration.
+
 ## Tests
 
 Focused tests are ordinary BlitzMax applications. For example:
