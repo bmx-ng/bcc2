@@ -381,6 +381,13 @@ Local nativeCallbackCall:TCallExpressionSyntax = TCallExpressionSyntax(nativeCal
 Local boundNativeCallback:TBoundCallExpression = TBoundCallExpression(nativeCallbackModel.BoundExpression(nativeCallbackCall))
 Check(TBoundConversionExpression(boundNativeCallback.arguments[0]).conversionKind = CONVERSION_CALLABLE_REFERENCE_TO_BYTE_POINTER, "native callback conversion remains explicit in the bound model")
 
+Local invalidNativeCallbackCallSource:String = "SuperStrict~nExtern~nFunction SetHook:Byte Ptr(callback:Byte Ptr, threadId:Int)~nFunction CurrentThreadId:UInt()~nEnd Extern~nType THooks~nMethod New()~nSetHook(KeyboardProc, CurrentThreadId())~nEnd Method~nFunction KeyboardProc:Int(code:Int)~nReturn code~nEnd Function~nEnd Type"
+Local invalidNativeCallbackCallParse:TParseResult = TBlitzMaxParser.ParseText(invalidNativeCallbackCallSource, "invalid-native-callback-call.bmx")
+Local invalidNativeCallbackCallModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(invalidNativeCallbackCallParse.syntaxTree)
+TExpressionBinder.Bind(invalidNativeCallbackCallModel)
+Check(invalidNativeCallbackCallModel.diagnostics.length = 1 And invalidNativeCallbackCallModel.diagnostics[0].code = "BMX3302", "an unrelated UInt-to-Int argument mismatch does not blame a valid Type Function callback")
+Check(invalidNativeCallbackCallModel.diagnostics[0].message.Contains("Argument types: (Int(Int), UInt)") And invalidNativeCallbackCallModel.diagnostics[0].message.Contains("SetHook(Byte Ptr, Int)"), "overload diagnostic identifies the mismatched thread ID alongside the valid callback")
+
 Local outerRoutineFallbackSource:String = "SuperStrict~nType TStream~nEnd Type~nFunction OpenCsvStream:TStream(url:Object)~nReturn New TStream~nEnd Function~nType TCsvParser~nMethod OpenCsvStream:Int(data:Byte Ptr, n:Size_T, size:Size_T)~nReturn 0~nEnd Method~nFunction Parse:TStream(path:String)~nReturn OpenCsvStream(path)~nEnd Function~nFunction Probe:Int(data:Byte Ptr)~nReturn OpenCsvStream(data, 1, 1)~nEnd Function~nEnd Type"
 Local outerRoutineFallbackParse:TParseResult = TBlitzMaxParser.ParseText(outerRoutineFallbackSource, "outer-routine-fallback.bmx")
 Local outerRoutineFallbackModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(outerRoutineFallbackParse.syntaxTree)
