@@ -1558,6 +1558,12 @@ Local bytePointerAddition:TBinaryExpressionSyntax = TBinaryExpressionSyntax(byte
 Local bytePointerCast:TCastExpressionSyntax = TCastExpressionSyntax(bytePointerAddition.left)
 Check(bytePointerCast <> Null And prefixCastModel.ExpressionType(bytePointerCast).DisplayName() = "Byte Ptr", "parenthesized prefix cast builds a typed cast expression")
 
+Local pointerComparisonSource:String = "SuperStrict~nLocal lp:LParam~nLocal hwnd:Byte Ptr~nLocal same:Int = (Byte Ptr lp = hwnd) And True"
+Local pointerComparisonParse:TParseResult = TBlitzMaxParser.ParseText(pointerComparisonSource, "parenthesized-pointer-comparison.bmx")
+Local pointerComparisonModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(pointerComparisonParse.syntaxTree)
+TExpressionBinder.Bind(pointerComparisonModel)
+Check(pointerComparisonParse.syntaxTree.diagnostics.length = 0 And pointerComparisonModel.diagnostics.length = 0, "a cast LParam compares with Byte Ptr before the surrounding And expression")
+
 Local unparenthesizedCastSource:String = "SuperStrict~nFunction GetValue:Int()~nReturn 42~nEnd Function~nLocal base:Byte Ptr~nLocal offset:Int~nLocal direct:Byte Ptr = Byte Ptr GetValue()~nLocal numeric:Int = Int base~nLocal nested:Byte Ptr = Byte Ptr Int Ptr(base + offset)[0]"
 Local unparenthesizedCastParse:TParseResult = TBlitzMaxParser.ParseText(unparenthesizedCastSource, "unparenthesized-prefix-casts.bmx")
 Local unparenthesizedCastModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(unparenthesizedCastParse.syntaxTree)

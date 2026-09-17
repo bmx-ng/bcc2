@@ -374,6 +374,15 @@ Local nestedPointerCast:TCastExpressionSyntax = TCastExpressionSyntax(TAssignmen
 Local dereferencedPointer:TIndexExpressionSyntax = TIndexExpressionSyntax(nestedPointerCast.expression)
 Check(nestedPointerCast <> Null And dereferencedPointer <> Null And TCastExpressionSyntax(dereferencedPointer.expression).targetType.pointerTokens.length = 1, "nested pointer cast indexes before applying its outer cast")
 
+Local comparedPointerCast:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nLocal lp:LParam~nLocal hwnd:Byte Ptr~nLocal same:Int = (Byte Ptr lp = hwnd) And True", "parenthesized-cast-comparison.bmx")
+Check(comparedPointerCast.syntaxTree.diagnostics.length = 0, "parenthesized pointer cast comparison parses without diagnostics")
+Local comparedPointerDeclaration:TVariableDeclarationStatementSyntax = TVariableDeclarationStatementSyntax(comparedPointerCast.syntaxTree.root.members[3])
+Local comparedPointerAnd:TBinaryExpressionSyntax = TBinaryExpressionSyntax(comparedPointerDeclaration.declarators[0].initializer)
+Local comparedPointerGroup:TParenthesizedExpressionSyntax = TParenthesizedExpressionSyntax(comparedPointerAnd.left)
+Local comparedPointerEquality:TBinaryExpressionSyntax = TBinaryExpressionSyntax(comparedPointerGroup.expression)
+Local comparedPointerOperand:TCastExpressionSyntax = TCastExpressionSyntax(comparedPointerEquality.left)
+Check(comparedPointerOperand <> Null And comparedPointerOperand.targetType.pointerTokens.length = 1 And TNameExpressionSyntax(comparedPointerOperand.expression).nameToken.text = "lp", "the cast applies to lp before comparison with hwnd")
+
 Local omittedArgsResult:TParseResult = TBlitzMaxParser.ParseText("result = Parse(value, start,,, flags)", "omitted_args.bmx")
 Check(omittedArgsResult.syntaxTree.diagnostics.length = 0, "omitted call argument diagnostics")
 Local omittedCall:TCallExpressionSyntax = TCallExpressionSyntax(TAssignmentStatementSyntax(omittedArgsResult.syntaxTree.root.members[0]).right)
