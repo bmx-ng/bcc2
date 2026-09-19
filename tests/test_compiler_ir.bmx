@@ -815,6 +815,15 @@ Check(nativeInterfaceConsumer.Succeeded(), "source-free native Interface consume
 Check(nativeInterfaceConsumerDiagnostics.length = 0, "source-free native Interface consumer emits C without diagnostics")
 Check(Contains(nativeInterfaceConsumerC, "->vtbl->AddRef((struct IUnknown_ *)") And Not Contains(nativeInterfaceConsumerC, "bbObjectInterface"), "a source-free compact consumer reconstructs native Interface inheritance and direct dispatch: " + nativeInterfaceConsumerC)
 
+Local nativeFieldOwnerSource:String = "SuperStrict~nModule Acme.NativeFieldOwner~nImport Acme.NativeInterface~nType THolder~nField browser:IUnknown_~nEnd Type"
+Local nativeFieldOwner:TCompilerResult = TBlitzMaxCompiler.Compile("/sdk/mod/acme.mod/nativefieldowner.mod/nativefieldowner.bmx", nativeFieldOwnerSource, stdcallResolver, win32StdCallOptions)
+Local nativeFieldOwnerInterfaceDiagnostics:TCompilerDiagnostic[]
+Local nativeFieldOwnerInterface:String = TBlitzMaxCompiler.EmitInterface(nativeFieldOwner, nativeFieldOwnerInterfaceDiagnostics)
+Check(nativeFieldOwner.Succeeded() And nativeFieldOwnerInterfaceDiagnostics.length = 0 And Contains(nativeFieldOwnerInterface, ".browser??IUnknown_"), "external Interface fields retain their compact native-reference marker")
+stdcallResolver.AddInterface("acme.nativefieldowner", "/sdk/mod/acme.mod/nativefieldowner.mod/nativefieldowner.release.win32.x86.i", nativeFieldOwnerInterface)
+Local nativeFieldConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("/sdk/mod/acme.mod/nativefieldconsumer.mod/nativefieldconsumer.bmx", "SuperStrict~nModule Acme.NativeFieldConsumer~nImport Acme.NativeFieldOwner~nFunction Create:THolder()~nReturn New THolder~nEnd Function", stdcallResolver, win32StdCallOptions)
+Check(nativeFieldConsumer.Succeeded(), "a source-free consumer imports a class with an external Interface field: " + CompilerDiagnosticSummary(nativeFieldConsumer))
+
 Local nativeInterfaceWin64:TCompilerResult = TBlitzMaxCompiler.Compile("/sdk/mod/acme.mod/nativeinterface.mod/nativeinterface.bmx", nativeInterfaceSource, stdcallResolver, win64StdCallOptions)
 Local nativeInterfaceWin64Diagnostics:TCompilerDiagnostic[]
 Local nativeInterfaceWin64Header:String = TBlitzMaxCompiler.EmitRuntimeHeader(nativeInterfaceWin64, nativeInterfaceWin64Diagnostics)

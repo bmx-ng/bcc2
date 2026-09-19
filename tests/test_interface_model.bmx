@@ -78,6 +78,9 @@ Local externalInterfaceRecord:TInterfaceRecord = externalInterfaceFile.declarati
 Check(externalInterfaceRecord.flags.Contains("E") And externalInterfaceRecord.flags.Contains("I"), "native external Interface retains its distinct type flags")
 Check(externalInterfaceRecord.members[0].routineSignature.parameters[1].declaredType.nameTokens[0].text = "IUnknown_", "native external Interface references decode from compact signatures")
 Check(externalInterfaceRecord.members[0].flags.Contains("W"), "native external Interface stdcall slots decode from compact signatures")
+Local externalFieldFile:TInterfaceFile = TInterfaceFileParser.Parse("THolder^Object{~n.browser??IWebBrowser2_~n}=~qexample_THolder~q", "native-interface-field.i")
+Local externalFieldType:TTypeReferenceSyntax = externalFieldFile.declarations[0].members[0].declaredTypeSyntax
+Check(externalFieldFile.diagnostics.length = 0 And externalFieldType.nameTokens.length = 1 And externalFieldType.nameTokens[0].text = "IWebBrowser2_" And Not externalFieldType.markerToken, "native external Interface field markers decode to the named type")
 
 Local externalSourceOptions:TCompilationSnapshotOptions = New TCompilationSnapshotOptions
 externalSourceOptions.targetPlatform = "win32"
