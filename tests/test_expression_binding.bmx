@@ -1591,6 +1591,10 @@ For Local diagnostic:TDiagnostic = EachIn readOnlyModel.diagnostics
 Next
 Check(readOnlyDiagnostics = 1, "ReadOnly field assignments are allowed in constructor overloads and rejected elsewhere")
 
+Local constantAssignmentSource:String = "SuperStrict~nConst str:String = ~qfoo~q~nConst count:Int = 1~nstr = ~qbar~q~ncount :+ 1~nEnum EConstantState~nReady~nEnd Enum~nEConstantState.Ready = EConstantState.Ready"
+Local constantAssignmentAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(constantAssignmentSource, "constant-assignment.bmx")
+Check(DiagnosticCount(constantAssignmentAnalysis.model.diagnostics, "BMX3327") = 3, "simple and compound assignments cannot target Const declarations or Enum members")
+
 Local enumOrdinalSource:String = "SuperStrict~nEnum EByteOrder~nLittleEndian~nBigEndian~nEnd Enum~nEnum ESmall : Byte~nZero~nOne~nEnd Enum~nLocal order:EByteOrder = EByteOrder.LittleEndian~nLocal ordinal:Int = order.Ordinal()~nLocal text:String = order.ToString()~nLocal small:ESmall = ESmall.One~nLocal smallOrdinal:Byte = small.Ordinal()"
 Local enumOrdinalParse:TParseResult = TBlitzMaxParser.ParseText(enumOrdinalSource, "enum-ordinal-binding.bmx")
 Local enumOrdinalModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(enumOrdinalParse.syntaxTree)
