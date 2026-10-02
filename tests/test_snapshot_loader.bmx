@@ -17,6 +17,14 @@ Function HasDiagnostic:Int(diagnostics:TDiagnostic[], code:String)
 	Return False
 End Function
 
+Function DiagnosticCount:Int(diagnostics:TDiagnostic[], code:String)
+	Local count:Int
+	For Local diagnostic:TDiagnostic = EachIn diagnostics
+		If diagnostic.code = code Then count :+ 1
+	Next
+	Return count
+End Function
+
 Type TMemorySnapshotResolver Extends TSnapshotResolver
 	Field includes:TMap = New TMap
 	Field interfaces:TMap = New TMap
@@ -255,6 +263,8 @@ TCompileTimeAnalyzer.Analyze(semanticModel)
 Check(semanticModel.diagnostics.length = 0, "imported operator expression diagnostics")
 Local supportVersion:TSymbol = semanticModel.ImportedScope("support.api").LookupLocal("SUPPORT_VERSION")[0]
 Check(semanticModel.SymbolConstantValue(supportVersion).integerValue = 1, "imported interface constant value")
+Local importedConstantAssignment:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/imported-constant-assignment.bmx", "SuperStrict~nImport support.api~nSUPPORT_VERSION = 2~nsupport.api.SUPPORT_VERSION :+ 1", resolver, options)
+Check(importedConstantAssignment.model.diagnostics.length = 2 And DiagnosticCount(importedConstantAssignment.model.diagnostics, "BMX3327") = 2, "unqualified and module-qualified imported constants reject simple and compound assignments")
 Local importedDefaults:TSymbol = semanticModel.ImportedScope("example.api").LookupLocal("UseDefaults")[0]
 Check(importedDefaults.parameters.length = 2, "imported managed default parameter count")
 Check(importedDefaults.parameters[0].defaultValue.kind = CONSTANT_VALUE_NULL And importedDefaults.parameters[1].defaultValue.kind = CONSTANT_VALUE_NULL, "imported ABI sentinels become semantic Null defaults")

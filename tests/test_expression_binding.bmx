@@ -1591,6 +1591,17 @@ For Local diagnostic:TDiagnostic = EachIn readOnlyModel.diagnostics
 Next
 Check(readOnlyDiagnostics = 1, "ReadOnly field assignments are allowed in constructor overloads and rejected elsewhere")
 
+Local constantAssignmentSource:String = "SuperStrict~nConst str:String = ~qfoo~q~nConst count:Int = 1~nGlobal mutableText:String~nLocal mutableCount:Int~nmutableText = ~qbar~q~nmutableCount :+ 1~nstr = ~qbar~q~n(count) :+ 1~nEnum EConstantState~nReady~nEnd Enum~nEConstantState.Ready = EConstantState.Ready"
+Local constantAssignmentAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(constantAssignmentSource, "constant-assignment.bmx")
+Local constantAssignmentLocations:Int
+Local constantAssignmentNames:Int
+For Local diagnostic:TDiagnostic = EachIn constantAssignmentAnalysis.model.diagnostics
+	If diagnostic.code <> "BMX3327" Then Continue
+	If diagnostic.span.start = constantAssignmentSource.Find("str = ~qbar~q") Or diagnostic.span.start = constantAssignmentSource.Find("(count) :+") Or diagnostic.span.start = constantAssignmentSource.Find("EConstantState.Ready =") Then constantAssignmentLocations :+ 1
+	If diagnostic.message.Contains("'str'") Or diagnostic.message.Contains("'count'") Or diagnostic.message.Contains("'Ready'") Then constantAssignmentNames :+ 1
+Next
+Check(constantAssignmentAnalysis.model.diagnostics.length = 3 And constantAssignmentLocations = 3 And constantAssignmentNames = 3, "simple, compound, parenthesized, and Enum constant targets receive focused assignment diagnostics without rejecting mutable storage")
+
 Local enumOrdinalSource:String = "SuperStrict~nEnum EByteOrder~nLittleEndian~nBigEndian~nEnd Enum~nEnum ESmall : Byte~nZero~nOne~nEnd Enum~nLocal order:EByteOrder = EByteOrder.LittleEndian~nLocal ordinal:Int = order.Ordinal()~nLocal text:String = order.ToString()~nLocal small:ESmall = ESmall.One~nLocal smallOrdinal:Byte = small.Ordinal()"
 Local enumOrdinalParse:TParseResult = TBlitzMaxParser.ParseText(enumOrdinalSource, "enum-ordinal-binding.bmx")
 Local enumOrdinalModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(enumOrdinalParse.syntaxTree)
