@@ -206,6 +206,8 @@ Type TBcc2Engine
 					options.warnArgumentCasts = True
 				Case "--no-auto-superstrict", "-nas"
 					options.noAutoSuperStrict = True
+				Case "--no-strict-upgrade", "-s"
+					options.noStrictUpgrade = True
 				Case "--platform", "-p"
 					index :+ 1
 					If index >= arguments.length Then Return Failure(output, "Missing platform.")
