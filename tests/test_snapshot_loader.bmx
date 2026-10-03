@@ -202,6 +202,46 @@ noAutoModeOptions.noAutoSuperStrict = True
 Local noAutoModeAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("no-auto-root.bmx", "Include ~qmode-child.bmx~q", modeResolver, noAutoModeOptions)
 Check(noAutoModeAnalysis.snapshot.rootDocument.tree.root.sourceMode = SOURCE_MODE_STRICT And noAutoModeAnalysis.model.globalScope.LookupLocal("ChildProcedure")[0].declaredType = noAutoModeAnalysis.model.BuiltinType("Int"), "-nas gives an undeclared root and its includes Strict return defaults")
 
+' An included source without its own mode follows the importing SuperStrict unit,
+' so its implicit Void method remains the same virtual selector in a child.
+modeResolver.AddInclude("override-base.bmx", "Type TModeBase~nMethod Test()~nEnd Method~nMethod Invoke()~nTest()~nEnd Method~nEnd Type")
+Local inheritedModeOverride:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("mode-override-root.bmx", "SuperStrict~nInclude ~qoverride-base.bmx~q~nType TModeChild Extends TModeBase~nMethod Test()~nEnd Method~nEnd Type", modeResolver, options)
+Local modeBases:TSymbol[] = inheritedModeOverride.model.globalScope.LookupLocal("TModeBase")
+Local modeChildren:TSymbol[] = inheritedModeOverride.model.globalScope.LookupLocal("TModeChild")
+Check(modeBases.length = 1 And modeChildren.length = 1, "included override source contributes its base and child Types")
+Local modeBase:TSymbol = modeBases[0]
+Local modeChild:TSymbol = modeChildren[0]
+Local modeBaseTests:TSymbol[] = modeBase.memberScope.LookupLocal("Test")
+Local modeChildTests:TSymbol[] = modeChild.memberScope.LookupLocal("Test")
+Check(modeBaseTests.length = 1 And modeChildTests.length = 1, "included override source contributes both Test methods")
+Local modeBaseTest:TSymbol = modeBaseTests[0]
+Local modeChildTest:TSymbol = modeChildTests[0]
+Check(inheritedModeOverride.Succeeded() And modeBaseTest.declaredType = inheritedModeOverride.model.BuiltinType("Void") And modeChildTest.declaredType = inheritedModeOverride.model.BuiltinType("Void"), "included source inherits SuperStrict and its implicit-return method remains override-compatible")
+
+' Production rejects a same-parameter method whose return is incompatible; it
+' must not silently allocate a second virtual slot.
+resolver.AddInterface("legacy.returnbase", "sdk/legacy.returnbase.i", "strict~nTLegacyReturnBase^Object{~n-Test%()=~qlegacy_TLegacyReturnBase_Test~q~n}=~qlegacy_TLegacyReturnBase~q")
+Local incompatibleReturn:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/incompatible-return.bmx", "SuperStrict~nImport legacy.returnbase~nType TIncompatibleReturn Extends TLegacyReturnBase~nMethod Test()~nEnd Method~nEnd Type", resolver, options)
+Check(HasDiagnostic(incompatibleReturn.model.diagnostics, "BMX3219"), "SuperStrict Void method cannot silently hide an inherited Strict Int method with the same parameters")
+
+' The established compatibility direction is Strict implicit Int overriding a
+' SuperStrict Void method. It upgrades by default and -nostrictupgrade rejects it.
+resolver.AddInterface("modern.returnbase", "sdk/modern.returnbase.i", "superstrict~nTModernReturnBase^Object{~n-Test()=~qmodern_TModernReturnBase_Test~q~n}=~qmodern_TModernReturnBase~q")
+Local strictOverrideSource:String = "Strict~nImport modern.returnbase~nType TStrictReturnChild Extends TModernReturnBase~nMethod Test()~nEnd Method~nEnd Type"
+Local upgradedReturn:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/upgraded-return.bmx", strictOverrideSource, resolver, options)
+Local upgradedTypes:TSymbol[] = upgradedReturn.model.globalScope.LookupLocal("TStrictReturnChild")
+Check(upgradedTypes.length = 1, "Strict override fixture contributes its child Type")
+Local upgradedType:TSymbol = upgradedTypes[0]
+Local upgradedMethods:TSymbol[] = upgradedType.memberScope.LookupLocal("Test")
+Check(upgradedMethods.length = 1, "Strict override fixture contributes its Test method")
+Local upgradedMethod:TSymbol = upgradedMethods[0]
+Check(upgradedReturn.Succeeded() And upgradedMethod.declaredType = upgradedReturn.model.BuiltinType("Void"), "Strict implicit Int override upgrades to inherited SuperStrict Void by default")
+Local noUpgradeAnalysisOptions:TLanguageAnalysisOptions = TLanguageAnalysisOptions.Create()
+noUpgradeAnalysisOptions.typeResolution = New TTypeResolutionOptions
+noUpgradeAnalysisOptions.typeResolution.noStrictUpgrade = True
+Local rejectedUpgrade:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/rejected-upgrade.bmx", strictOverrideSource, resolver, options, noUpgradeAnalysisOptions)
+Check(HasDiagnostic(rejectedUpgrade.model.diagnostics, "BMX3219"), "-nostrictupgrade rejects the Strict implicit-return compatibility upgrade")
+
 Local ownedSourceOptions:TCompilationSnapshotOptions = New TCompilationSnapshotOptions
 ownedSourceOptions.targetPlatform = options.targetPlatform
 ownedSourceOptions.conditionalSymbols = options.conditionalSymbols
