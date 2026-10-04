@@ -78,12 +78,28 @@ Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Long) Return 1
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Long) Return 1 End Function~nFunction Pick:Int(value:ULong) Return 2 End Function~nLocal value:UInt~nLocal result:Int=Pick(value)", "uint-signedness-overload.bmx") = "ULong", "UInt prefers ULong over equally wide signed Long")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Float) Return 1 End Function~nFunction Pick:Int(value:Double) Return 2 End Function~nLocal value:Long~nLocal result:Int=Pick(value)", "long-real-overload.bmx") = "Double", "Long prefers Double over Float")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Float) Return 1 End Function~nFunction Pick:Int(value:Double) Return 2 End Function~nLocal value:ULong~nLocal result:Int=Pick(value)", "ulong-real-overload.bmx") = "Double", "ULong prefers Double over Float")
+Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(expected:Float, actual:Float, delta:Float=0) Return 1 End Function~nFunction Pick:Int(expected:Double, actual:Double, delta:Double=0) Return 2 End Function~nLocal index:Int=3~nLocal actual:ULong=9~nLocal result:Int=Pick(index*index, actual)", "mixed-int-ulong-real-overload.bmx") = "Double", "mixed Int and ULong arguments select the production-compatible Double overload")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Long) Return 1 End Function~nFunction Pick:Int(value:Double) Return 2 End Function~nLocal value:LongInt~nLocal result:Int=Pick(value)", "longint-widening-overload.bmx") = "Long", "LongInt prefers its integral Long destination")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:ULong) Return 1 End Function~nFunction Pick:Int(value:Double) Return 2 End Function~nLocal value:ULongInt~nLocal result:Int=Pick(value)", "ulongint-widening-overload.bmx") = "ULong", "ULongInt prefers its integral ULong destination")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Long) Return 1 End Function~nFunction Pick:Int(value:ULong) Return 2 End Function~nLocal value:Size_T~nLocal result:Int=Pick(value)", "size-t-widening-overload.bmx") = "ULong", "Size_T prefers the unsigned ULong destination")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Long) Return 1 End Function~nFunction Pick:Int(value:Double) Return 2 End Function~nLocal value:LParam~nLocal result:Int=Pick(value)", "lparam-widening-overload.bmx") = "Long", "LParam prefers its integral Long destination")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Size_T) Return 1 End Function~nFunction Pick:Int(value:ULong) Return 2 End Function~nLocal value:WParam~nLocal result:Int=Pick(value)", "wparam-widening-overload.bmx") = "Size_T", "WParam prefers its pointer-sized unsigned destination")
 Check(SelectedParameterType("SuperStrict~nFunction Pick:Int(value:Double) Return 1 End Function~nLocal value:Float~nLocal result:Int=Pick(value)", "float-widening-overload.bmx") = "Double", "Float widens to Double")
+
+' Exercise aggregate overload scores, not just isolated conversions. Every
+' ordered pair of integral sources is checked because a regression in one
+' argument can otherwise be hidden by a preference in the other. Fixed
+' Long/ULong values force the Double family; the remaining integer sources use
+' the less costly Float family.
+Local realSources:String[] = ["Byte", "Short", "Int", "UInt", "Long", "ULong", "LongInt", "ULongInt", "Size_T", "WParam", "LParam"]
+For Local left:String = EachIn realSources
+	For Local right:String = EachIn realSources
+		Local expected:String = "Float"
+		If left = "Long" Or left = "ULong" Or right = "Long" Or right = "ULong" Then expected = "Double"
+		Local pairSource:String = "SuperStrict~nFunction Pick:Int(first:Float, second:Float) Return 1 End Function~nFunction Pick:Int(first:Double, second:Double) Return 2 End Function~nLocal first:" + left + "~nLocal second:" + right + "~nLocal result:Int=Pick(first, second)"
+		Check(SelectedParameterType(pairSource, "real-overload-" + left + "-" + right + ".bmx") = expected, left + " and " + right + " select the expected " + expected + " overload")
+	Next
+Next
 
 Local wideningArgumentsSource:String = "SuperStrict~nFunction NeedShort(value:Short)~nEnd Function~nFunction NeedUInt(value:UInt)~nEnd Function~nFunction NeedLong(value:Long)~nEnd Function~nFunction NeedULong(value:ULong)~nEnd Function~nFunction NeedDouble(value:Double)~nEnd Function~nLocal byteValue:Byte~nLocal shortValue:Short~nLocal intValue:Int~nLocal uintValue:UInt~nLocal longValue:Long~nLocal ulongValue:ULong~nLocal floatValue:Float~nNeedShort(byteValue)~nNeedUInt(shortValue)~nNeedLong(intValue)~nNeedULong(uintValue)~nNeedDouble(longValue)~nNeedDouble(ulongValue)~nNeedDouble(floatValue)"
 Check(TBlitzMaxLanguage.AnalyzeText(wideningArgumentsSource, "numeric-widening-arguments.bmx").Succeeded(), "every primary numeric type crosses its widening argument boundary without a cast")
