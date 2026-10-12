@@ -1354,6 +1354,19 @@ Local contextualEmptyNestedArrayDiagnostics:TCompilerDiagnostic[]
 Local contextualEmptyNestedArrayC:String = TBlitzMaxCompiler.EmitRuntimeC(contextualEmptyNestedArray, contextualEmptyNestedArrayDiagnostics)
 Check(contextualEmptyNestedArray.Succeeded() And contextualEmptyNestedArrayDiagnostics.length = 0 And Contains(contextualEmptyNestedArrayC, "= &bbEmptyArray;"), "an empty literal uses its known nested heap-array assignment type and lowers to the canonical empty-array sentinel")
 
+Local zeroLengthArrayReturns:TCompilerResult = TBlitzMaxCompiler.Compile("zero-length-array-returns.bmx", "SuperStrict~nType TTest~nEnd Type~nFunction GetEmptyTestArray:TTest[]()~nReturn New TTest[0]~nEnd Function~nFunction GetNullTestArray:TTest[]()~nReturn Null~nEnd Function~nFunction GetSizedTestArray:TTest[](size:Int)~nReturn New TTest[size]~nEnd Function", resolver, TestOptions())
+Local zeroLengthArrayReturnDiagnostics:TCompilerDiagnostic[]
+Local zeroLengthArrayReturnC:String = TBlitzMaxCompiler.EmitRuntimeC(zeroLengthArrayReturns, zeroLengthArrayReturnDiagnostics)
+Local compactZeroLengthArrayReturnC:String = Compact(zeroLengthArrayReturnC)
+Check(zeroLengthArrayReturns.Succeeded() And zeroLengthArrayReturnDiagnostics.length = 0, "literal-zero and dynamic Array-return functions compile successfully")
+Check(Contains(compactZeroLengthArrayReturnC, "BBARRAYbmx_fn0_GetEmptyTestArray(void){return&bbEmptyArray;}") And Contains(compactZeroLengthArrayReturnC, "BBARRAYbmx_fn1_GetNullTestArray(void){return&bbEmptyArray;}"), "an explicit terminal Return suppresses the unreachable synthesized default Return")
+Check(Not Contains(zeroLengthArrayReturnC, "bbArrayNew1D(~q:TTest~q, 0)") And Contains(zeroLengthArrayReturnC, "bbArrayNew1D(~q:TTest~q, bmx_p0_size)"), "a one-dimensional literal-zero Array allocation uses the canonical empty sentinel while a dynamic extent still calls the runtime allocator")
+
+Local partialArrayReturn:TCompilerResult = TBlitzMaxCompiler.Compile("partial-array-return.bmx", "SuperStrict~nFunction MaybeArray:Int[](available:Int)~nIf available Then Return New Int[0]~nEnd Function", resolver, TestOptions())
+Local partialArrayReturnDiagnostics:TCompilerDiagnostic[]
+Local partialArrayReturnC:String = TBlitzMaxCompiler.EmitRuntimeC(partialArrayReturn, partialArrayReturnDiagnostics)
+Check(partialArrayReturn.Succeeded() And partialArrayReturnDiagnostics.length = 0 And Occurrences(partialArrayReturnC, "return &bbEmptyArray;") = 2, "a function that can fall through retains its synthesized default Array return")
+
 Local nestedArrayFieldDimensions:TCompilerResult = TBlitzMaxCompiler.Compile("nested-array-field-dimensions.bmx", "SuperStrict~nType TNestedArrayFields~nField leading:String[4][]~nField trailing:String[][4]~nEnd Type~nLocal holder:TNestedArrayFields=New TNestedArrayFields~nLocal first:String[]=holder.leading[0]~nLocal second:String[]=holder.trailing[0]", resolver, TestOptions())
 Local nestedArrayFieldDimensionsDiagnostics:TCompilerDiagnostic[]
 Local nestedArrayFieldDimensionsC:String = TBlitzMaxCompiler.EmitRuntimeC(nestedArrayFieldDimensions, nestedArrayFieldDimensionsDiagnostics)
