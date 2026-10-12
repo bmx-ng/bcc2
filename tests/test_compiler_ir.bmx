@@ -1387,6 +1387,18 @@ Check(zeroLengthArrayReturns.Succeeded() And zeroLengthArrayReturnDiagnostics.le
 Check(Contains(compactZeroLengthArrayReturnC, "BBARRAYbmx_fn0_GetEmptyTestArray(void){return&bbEmptyArray;}") And Contains(compactZeroLengthArrayReturnC, "BBARRAYbmx_fn1_GetNullTestArray(void){return&bbEmptyArray;}"), "an explicit terminal Return suppresses the unreachable synthesized default Return")
 Check(Not Contains(zeroLengthArrayReturnC, "bbArrayNew1D(~q:TTest~q, 0)") And Contains(zeroLengthArrayReturnC, "bbArrayNew1D(~q:TTest~q, bmx_p0_size)"), "a one-dimensional literal-zero Array allocation uses the canonical empty sentinel while a dynamic extent still calls the runtime allocator")
 
+Local debugZeroLengthArrayOptions:TCompilerOptions = DebugTestOptions()
+debugZeroLengthArrayOptions.debugInstrumentation = True
+Local debugZeroLengthArrayReturns:TCompilerResult = TBlitzMaxCompiler.Compile("zero-length-array-returns-debug.bmx", "SuperStrict~nType TTest~nEnd Type~nFunction GetEmptyTestArray:TTest[]()~nReturn New TTest[0]~nEnd Function~nFunction GetNullTestArray:TTest[]()~nReturn Null~nEnd Function~nFunction GetSizedTestArray:TTest[](size:Int)~nReturn New TTest[size]~nEnd Function", resolver, debugZeroLengthArrayOptions)
+Local debugZeroLengthArrayReturnDiagnostics:TCompilerDiagnostic[]
+Local debugZeroLengthArrayReturnC:String = TBlitzMaxCompiler.EmitRuntimeC(debugZeroLengthArrayReturns, debugZeroLengthArrayReturnDiagnostics)
+Local debugEmptyArraySection:String = CFunctionSection(debugZeroLengthArrayReturnC, "BBARRAY bmx_fn0_GetEmptyTestArray")
+Local debugNullArraySection:String = CFunctionSection(debugZeroLengthArrayReturnC, "BBARRAY bmx_fn1_GetNullTestArray")
+Local debugSizedArraySection:String = CFunctionSection(debugZeroLengthArrayReturnC, "BBARRAY bmx_fn2_GetSizedTestArray")
+Check(debugZeroLengthArrayReturns.Succeeded() And debugZeroLengthArrayReturnDiagnostics.length = 0, "debug literal-zero and dynamic Array-return functions compile successfully")
+Check(Occurrences(debugEmptyArraySection, "return &bbEmptyArray;") = 1 And Not Contains(debugEmptyArraySection, "bbArrayNew1D(") And Occurrences(debugNullArraySection, "return &bbEmptyArray;") = 1, "debug explicit empty and Null Array returns emit one canonical return each")
+Check(debugSizedArraySection.length And Contains(debugSizedArraySection, "bbArrayNew1D(~q:TTest~q, bmx_p0_size)") And Occurrences(debugSizedArraySection, "return &bbEmptyArray;") = 0, "debug dynamic Array returns retain their allocation without an appended fallback")
+
 Local partialArrayReturn:TCompilerResult = TBlitzMaxCompiler.Compile("partial-array-return.bmx", "SuperStrict~nFunction MaybeArray:Int[](available:Int)~nIf available Then Return New Int[0]~nEnd Function", resolver, TestOptions())
 Local partialArrayReturnDiagnostics:TCompilerDiagnostic[]
 Local partialArrayReturnC:String = TBlitzMaxCompiler.EmitRuntimeC(partialArrayReturn, partialArrayReturnDiagnostics)
@@ -1413,6 +1425,22 @@ Check(partialIntSection.length And Contains(partialIntSection, "return 77;") And
 Check(finallyIntSection.length And Contains(finallyIntSection, "bmx_cleanup_return_0 = 88;") And Not Contains(finallyIntSection, "return 0;"), "a Return with Finally cleanup has no second fallback after its cleanup return")
 Check(catchIntSection.length And Contains(catchIntSection, "bmx_cleanup_return_0 = 99;") And Contains(catchIntSection, "return 111;") And Not Contains(catchIntSection, "return 0;"), "returning Try and Catch paths have no synthesized fallback")
 Check(directStringSection.length And Contains(directStringSection, "return (BBString*)&bmx_string") And Not Contains(directStringSection, "return &bbEmptyString;"), "a direct managed String Return has no synthesized managed-default fallback")
+
+Local debugTerminalReturnOptions:TCompilerOptions = DebugTestOptions()
+debugTerminalReturnOptions.debugInstrumentation = True
+Local debugTerminalReturnMatrix:TCompilerResult = TBlitzMaxCompiler.Compile("terminal-return-matrix-debug.bmx", terminalReturnMatrixSource, resolver, debugTerminalReturnOptions)
+Local debugTerminalReturnMatrixDiagnostics:TCompilerDiagnostic[]
+Local debugTerminalReturnMatrixC:String = TBlitzMaxCompiler.EmitRuntimeC(debugTerminalReturnMatrix, debugTerminalReturnMatrixDiagnostics)
+Local debugDirectIntSection:String = CFunctionSection(debugTerminalReturnMatrixC, "BBINT bmx_fn0_DirectInt")
+Local debugBranchIntSection:String = CFunctionSection(debugTerminalReturnMatrixC, "BBINT bmx_fn2_BranchInt")
+Local debugSelectIntSection:String = CFunctionSection(debugTerminalReturnMatrixC, "BBINT bmx_fn3_SelectInt")
+Local debugPartialIntSection:String = CFunctionSection(debugTerminalReturnMatrixC, "BBINT bmx_fn4_PartialInt")
+Local debugFinallyIntSection:String = CFunctionSection(debugTerminalReturnMatrixC, "BBINT bmx_fn5_FinallyInt")
+Local debugCatchIntSection:String = CFunctionSection(debugTerminalReturnMatrixC, "BBINT bmx_fn6_CatchInt")
+Check(debugTerminalReturnMatrix.Succeeded() And debugTerminalReturnMatrixDiagnostics.length = 0, "the debug terminal Return control-flow matrix compiles successfully")
+Check(debugDirectIntSection.length And Not Contains(debugDirectIntSection, "return 0;") And debugBranchIntSection.length And Not Contains(debugBranchIntSection, "return 0;") And debugSelectIntSection.length And Not Contains(debugSelectIntSection, "return 0;"), "debug direct and complete conditional returns have no synthesized fallback")
+Check(debugPartialIntSection.length And Contains(debugPartialIntSection, "return 0;"), "debug partial conditional returns retain the required fallback")
+Check(debugFinallyIntSection.length And Not Contains(debugFinallyIntSection, "return 0;") And debugCatchIntSection.length And Not Contains(debugCatchIntSection, "return 0;"), "debug exception-cleanup returns have no synthesized fallback")
 
 Local nestedArrayFieldDimensions:TCompilerResult = TBlitzMaxCompiler.Compile("nested-array-field-dimensions.bmx", "SuperStrict~nType TNestedArrayFields~nField leading:String[4][]~nField trailing:String[][4]~nEnd Type~nLocal holder:TNestedArrayFields=New TNestedArrayFields~nLocal first:String[]=holder.leading[0]~nLocal second:String[]=holder.trailing[0]", resolver, TestOptions())
 Local nestedArrayFieldDimensionsDiagnostics:TCompilerDiagnostic[]
