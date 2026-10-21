@@ -1913,6 +1913,25 @@ Local declaredArrayDimensionBound:TBoundVariableDeclarationStatement = TBoundVar
 Check(declaredArrayDimensionModel.diagnostics.length = 0 And declaredArrayDimensionSyntax.declarators[0].arrayDimensions.length = 1, "declaration-style heap Array dimensions remain explicit syntax rather than becoming StaticArray bounds")
 Check(declaredArrayDimensionBound.variables[0].arrayDimensions.length = 1 And declaredArrayDimensionBound.variables[0].arrayDimensions[0].semanticType = declaredArrayDimensionModel.BuiltinType("Int"), "declaration-style heap Array dimensions retain their bound semantic expressions for later IR lowering")
 
+Local callableArrayDimensionParse:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nGlobal callbacks(value:Int)[32]~nLocal matrix:String(value:Int)[2,3]", "callable-declared-array-dimensions.bmx")
+Local callableArrayDimensionModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(callableArrayDimensionParse.syntaxTree)
+TExpressionBinder.Bind(callableArrayDimensionModel)
+Local callableArrayDimensionGlobal:TVariableDeclarationStatementSyntax
+Local callableArrayDimensionLocal:TVariableDeclarationStatementSyntax
+For Local callableArrayDimensionMember:TSyntaxNode = EachIn callableArrayDimensionParse.syntaxTree.root.members
+	Local callableArrayDimensionCandidate:TVariableDeclarationStatementSyntax = TVariableDeclarationStatementSyntax(callableArrayDimensionMember)
+	If Not callableArrayDimensionCandidate Or Not callableArrayDimensionCandidate.declarators.length Then Continue
+	Select callableArrayDimensionCandidate.declarators[0].nameToken.text.ToLower()
+		Case "callbacks" callableArrayDimensionGlobal = callableArrayDimensionCandidate
+		Case "matrix" callableArrayDimensionLocal = callableArrayDimensionCandidate
+	End Select
+Next
+Check(callableArrayDimensionGlobal <> Null And callableArrayDimensionLocal <> Null, "callable heap Array declarations remain present in the syntax tree")
+Local callableArrayDimensionGlobalBound:TBoundVariableDeclarationStatement = TBoundVariableDeclarationStatement(callableArrayDimensionModel.BoundStatement(callableArrayDimensionGlobal))
+Local callableArrayDimensionLocalBound:TBoundVariableDeclarationStatement = TBoundVariableDeclarationStatement(callableArrayDimensionModel.BoundStatement(callableArrayDimensionLocal))
+Check(callableArrayDimensionModel.diagnostics.length = 0 And callableArrayDimensionGlobal.declarators[0].arrayDimensions.length = 1 And callableArrayDimensionLocal.declarators[0].arrayDimensions.length = 2, "callable heap Array declarators retain one-dimensional and ranked allocation expressions")
+Check(callableArrayDimensionGlobalBound.variables[0].arrayDimensions.length = 1 And callableArrayDimensionLocalBound.variables[0].arrayDimensions.length = 2 And callableArrayDimensionLocalBound.variables[0].arrayDimensions[1].semanticType = callableArrayDimensionModel.BuiltinType("Int"), "callable heap Array allocation dimensions remain bound for IR lowering")
+
 Local ascCaseParse:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nLocal tag:Short~nSelect tag~nCase Asc(~qb~q), Asc(~q/~q)~nEnd Select", "asc-short-case.bmx")
 Local ascCaseModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(ascCaseParse.syntaxTree)
 TExpressionBinder.Bind(ascCaseModel)
