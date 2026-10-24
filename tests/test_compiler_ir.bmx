@@ -2200,6 +2200,23 @@ Local qualifiedTypeGlobal:TCompilerResult = TBlitzMaxCompiler.Compile("qualified
 Local qualifiedTypeGlobalDiagnostics:TCompilerDiagnostic[]
 Local qualifiedTypeGlobalC:String = TBlitzMaxCompiler.EmitRuntimeC(qualifiedTypeGlobal, qualifiedTypeGlobalDiagnostics)
 Check(qualifiedTypeGlobal.Succeeded() And qualifiedTypeGlobalDiagnostics.length = 0 And Contains(qualifiedTypeGlobalC, "bmx_global_") And Not HasCompilerDiagnostic(qualifiedTypeGlobal, "BMXC1015"), "Self- and Type-qualified access to Type-owned Globals lowers to the declaration-owned static storage")
+Local typeFunctionFieldShadowSource:String = "SuperStrict~nGlobal year:Int~nType TScoutingReport~nField player:Int~nField scout:Int~nField year:Int~nGlobal list:TScoutingReport[]~nFunction RemoveOldScoutingReports()~nIf TScoutingReport.list~nFor Local s:TScoutingReport=EachIn TScoutingReport.list~nIf s.year+1<year Then~ns.player=Null~ns.scout=Null~ns.Destroy()~nEnd If~nNext~nEnd If~nEnd Function~nMethod Destroy()~nEnd Method~nEnd Type"
+Local typeFunctionFieldShadow:TCompilerResult = TBlitzMaxCompiler.Compile("type-function-field-shadow.bmx", typeFunctionFieldShadowSource, resolver, TestOptions())
+Local typeFunctionFieldShadowDiagnostics:TCompilerDiagnostic[]
+Local typeFunctionFieldShadowC:String = TBlitzMaxCompiler.EmitRuntimeC(typeFunctionFieldShadow, typeFunctionFieldShadowDiagnostics)
+Check(typeFunctionFieldShadow.Succeeded() And typeFunctionFieldShadowDiagnostics.length = 0 And typeFunctionFieldShadowC.length > 0, "a Type Function ignores a same-named instance Field and resolves an enclosing module Global: " + CompilerDiagnosticSummary(typeFunctionFieldShadow))
+Local debugTypeFunctionFieldShadow:TCompilerResult = TBlitzMaxCompiler.Compile("debug-type-function-field-shadow.bmx", typeFunctionFieldShadowSource, resolver, DebugTestOptions())
+Local debugTypeFunctionFieldShadowDiagnostics:TCompilerDiagnostic[]
+Local debugTypeFunctionFieldShadowC:String = TBlitzMaxCompiler.EmitRuntimeC(debugTypeFunctionFieldShadow, debugTypeFunctionFieldShadowDiagnostics)
+Check(debugTypeFunctionFieldShadow.Succeeded() And debugTypeFunctionFieldShadowDiagnostics.length = 0 And debugTypeFunctionFieldShadowC.length > 0, "debug lowering resolves a Type Function's same-named module Global without inventing Self: " + CompilerDiagnosticSummary(debugTypeFunctionFieldShadow))
+Local staticAndInstanceShadow:TCompilerResult = TBlitzMaxCompiler.Compile("static-and-instance-shadow.bmx", "SuperStrict~nGlobal value:Int~nType TShadow~nField value:Int~nFunction ReadStatic:Int()~nReturn value~nEnd Function~nMethod ReadInstance:Int()~nReturn value~nEnd Method~nEnd Type", resolver, TestOptions())
+Local staticAndInstanceShadowDiagnostics:TCompilerDiagnostic[]
+Local staticAndInstanceShadowC:String = TBlitzMaxCompiler.EmitRuntimeC(staticAndInstanceShadow, staticAndInstanceShadowDiagnostics)
+Local staticShadowSection:String = CFunctionSection(staticAndInstanceShadowC, "ReadStatic(")
+Local instanceShadowSection:String = CFunctionSection(staticAndInstanceShadowC, "ReadInstance(")
+Check(staticAndInstanceShadow.Succeeded() And staticAndInstanceShadowDiagnostics.length = 0 And Contains(staticShadowSection, "bmx_global_") And Not Contains(staticShadowSection, "->bmx_field_") And Contains(instanceShadowSection, "->bmx_field_"), "static and instance routines select module and instance storage respectively when names collide")
+Local missingStaticReceiver:TCompilerResult = TBlitzMaxCompiler.Compile("missing-static-receiver.bmx", "SuperStrict~nType TStaticOnly~nField value:Int~nFunction Read:Int()~nReturn value~nEnd Function~nEnd Type", resolver, TestOptions())
+Check(Not missingStaticReceiver.Succeeded() And HasLanguageDiagnostic(missingStaticReceiver, "BMX3300") And Not HasCompilerDiagnostic(missingStaticReceiver, "BMXC1151"), "a Type Function cannot implicitly access an instance Field when no outer declaration is available")
 Local releasePointer:TCompilerResult = TBlitzMaxCompiler.Compile("release-pointer.bmx", debugPointerSource, resolver, TestOptions())
 Local releasePointerDump:String = TCompilerIrDumper.Dump(releasePointer.ir)
 Local releasePointerDiagnostics:TCompilerDiagnostic[]
