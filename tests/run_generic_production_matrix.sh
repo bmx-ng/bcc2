@@ -55,4 +55,6 @@ run_configuration release-default -single -r
 run_configuration debug-explicit-threaded -single -h
 run_configuration release-explicit-threaded -single -h -r
 
+"$(dirname -- "$0")/run_imported_interface_abi_regression.sh" "$bmk_path" "$output_root/imported-interface-abi"
+
 echo "bcc2 generic production matrix passed: $(uname -s) $(uname -m)"
