@@ -15,6 +15,8 @@ Type TInheritedBase<T>
 End Type
 
 Type TInheritedMiddle<T> Extends TInheritedBase<T>
+	Field middleText:String = "middle"
+	Field middleValue:Int = 42
 End Type
 
 Type TInheritedDeep<T> Extends TInheritedMiddle<T>

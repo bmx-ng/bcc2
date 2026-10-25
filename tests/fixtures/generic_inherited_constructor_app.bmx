@@ -5,10 +5,10 @@ Import BRL.StandardIO
 Import "generic_inherited_constructor_provider.bmx"
 
 Local deepDefault:TInheritedDeep<String> = New TInheritedDeep<String>("hello")
-If deepDefault.value <> "hello" Or deepDefault.note <> "!" Or deepDefault.RuntimeKind() <> "deep" Then Throw "deep inherited constructor lost its default or runtime identity"
+If deepDefault.value <> "hello" Or deepDefault.note <> "!" Or deepDefault.middleText <> "middle" Or deepDefault.middleValue <> 42 Or deepDefault.RuntimeKind() <> "deep" Then Throw "deep inherited constructor lost its default, intermediate field initializers, or runtime identity"
 
 Local deepExplicit:TInheritedDeep<String> = New TInheritedDeep<String>("hello", "?")
-If deepExplicit.value <> "hello" Or deepExplicit.note <> "?" Then Throw "deep inherited constructor lost its explicit optional argument"
+If deepExplicit.value <> "hello" Or deepExplicit.note <> "?" Or deepExplicit.middleText <> "middle" Or deepExplicit.middleValue <> 42 Then Throw "deep inherited constructor lost its explicit optional argument or intermediate field initializers"
 
 Local implicitDefault:TInheritedDeep<String> = New TInheritedDeep<String>()
 If implicitDefault.note <> "" Or implicitDefault.RuntimeKind() <> "deep" Then Throw "inherited optional constructor replaced implicit New()"
