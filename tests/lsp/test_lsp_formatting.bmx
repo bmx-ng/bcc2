@@ -3,6 +3,7 @@
 
 SuperStrict
 Framework BRL.StandardIO
+Import BlitzMax.Format
 Import BlitzMax.LSP
 Import BRL.TextStream
 
@@ -49,34 +50,23 @@ Function MultilineLiteral:String(value:String)
 End Function
 
 Function Formatted:String(original:String, thenStyle:String = "preserve", endStyle:String = "preserve", inlineIfStyle:String = "preserve", tabSize:Int = 4, insertSpaces:Int = False, formatIndent:Int = False, spaceAfterComma:Int = True, caseIndent:String = "indented", metadataBraceSpacing:String = "preserve", callParenSpacing:String = "preserve", assignmentSpacing:String = "preserve", binarySpacing:String = "preserve", trimTrailingWhitespace:Int = True, declarationBlankLines:String = "preserve", controlBlankLines:String = "preserve")
-	Local document:TLspDocument = New TLspDocument
-	document.text = original
-	document.path = "format-test.bmx"
-	Local edits:TJSONArray = TBlitzMaxLspFormatting.Query(document, thenStyle, endStyle, inlineIfStyle, tabSize, insertSpaces, formatIndent, spaceAfterComma, caseIndent, metadataBraceSpacing, callParenSpacing, assignmentSpacing, binarySpacing, trimTrailingWhitespace, declarationBlankLines, controlBlankLines)
-	Local source:TSourceText = TSourceText.Create(original)
-	Local result:String = original
-	Local preceding:Int = original.length + 1
-	For Local count:Int = 0 Until edits.Size()
-		Local chosen:TJSONObject
-		Local chosenStart:Int = -1
-		Local chosenEnd:Int
-		For Local index:Int = 0 Until edits.Size()
-			Local edit:TJSONObject = TJSONObject(edits.Get(index))
-			Local range:TJSONObject = TJSONObject(edit.Get("range"))
-			Local startPosition:TJSONObject = TJSONObject(range.Get("start"))
-			Local endPosition:TJSONObject = TJSONObject(range.Get("end"))
-			Local start:Int = TLspPositions.Offset(source, Int(startPosition.GetInteger("line")), Int(startPosition.GetInteger("character")))
-			If start >= preceding Or start <= chosenStart Then Continue
-			chosen = edit
-			chosenStart = start
-			chosenEnd = TLspPositions.Offset(source, Int(endPosition.GetInteger("line")), Int(endPosition.GetInteger("character")))
-		Next
-		Check(chosen <> Null, "formatter edits do not overlap at one start")
-		Check(chosenEnd <= preceding, "formatter edits do not overlap")
-		result = result[..chosenStart] + chosen.GetString("newText") + result[chosenEnd..]
-		preceding = chosenStart
-	Next
-	Return result
+	Local options:TBlitzMaxFormatOptions = New TBlitzMaxFormatOptions
+	options.thenStyle = thenStyle
+	options.endStyle = endStyle
+	options.inlineIfStyle = inlineIfStyle
+	options.tabSize = tabSize
+	options.insertSpaces = insertSpaces
+	options.indent = formatIndent
+	options.spaceAfterComma = spaceAfterComma
+	options.caseIndent = caseIndent
+	options.metadataBraceSpacing = metadataBraceSpacing
+	options.callParenSpacing = callParenSpacing
+	options.assignmentSpacing = assignmentSpacing
+	options.binarySpacing = binarySpacing
+	options.trimTrailingWhitespace = trimTrailingWhitespace
+	options.declarationBlankLines = declarationBlankLines
+	options.controlBlankLines = controlBlankLines
+	Return TBlitzMaxFormatter.Query(original, "format-test.bmx", options).Apply(original)
 End Function
 
 Local body:String = "SuperStrict~nFunction Probe:Int(value:Int)~nIf value > 0~nReturn value~nElseIf value < 0 Then~nReturn -value~nEnd If~nEnd Function~n"
@@ -354,16 +344,19 @@ changeRequest.Set("jsonrpc", "2.0")
 changeRequest.Set("method", "workspace/didChangeConfiguration")
 changeRequest.Set("params", changeParams)
 server.HandlePayload(changeRequest.SaveString(JSON_COMPACT))
-Check(server.workspaces.adHoc.configuration.formatThenStyle = "add", "workspace settings reach the formatter")
-Check(Not server.workspaces.adHoc.configuration.formatSpaceAfterComma, "comma spacing setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatCaseIndent = "aligned", "Select indentation setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatMetadataBraceSpacing = "spaced", "metadata brace setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatCallParenSpacing = "compact", "call parentheses setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatAssignmentSpacing = "spaced", "assignment spacing setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatBinarySpacing = "spaced", "binary spacing setting reaches the formatter")
-Check(Not server.workspaces.adHoc.configuration.formatTrimTrailingWhitespace, "trailing whitespace setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatDeclarationBlankLines = "one", "declaration blank-line setting reaches the formatter")
-Check(server.workspaces.adHoc.configuration.formatControlBlankLines = "none", "control blank-line setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.thenStyle = "add", "workspace settings reach the formatter")
+Check(Not server.workspaces.adHoc.configuration.formatOptions.spaceAfterComma, "comma spacing setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.caseIndent = "aligned", "Select indentation setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.metadataBraceSpacing = "spaced", "metadata brace setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.callParenSpacing = "compact", "call parentheses setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.assignmentSpacing = "spaced", "assignment spacing setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.binarySpacing = "spaced", "binary spacing setting reaches the formatter")
+Check(Not server.workspaces.adHoc.configuration.formatOptions.trimTrailingWhitespace, "trailing whitespace setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.declarationBlankLines = "one", "declaration blank-line setting reaches the formatter")
+Check(server.workspaces.adHoc.configuration.formatOptions.controlBlankLines = "none", "control blank-line setting reaches the formatter")
+Local copiedConfiguration:TLspWorkspaceConfiguration = server.workspaces.adHoc.configuration.Copy()
+copiedConfiguration.formatOptions.thenStyle = "remove"
+Check(server.workspaces.adHoc.configuration.formatOptions.thenStyle = "add", "workspace copies own their formatter options")
 Local formatDocument:TJSONObject = JsonObject()
 formatDocument.Set("uri", uri)
 Local formatParams:TJSONObject = JsonObject()
