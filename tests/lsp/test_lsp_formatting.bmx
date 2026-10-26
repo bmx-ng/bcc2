@@ -407,6 +407,36 @@ formatRequest.Set("method", "textDocument/formatting")
 formatRequest.Set("id", 5)
 Local delimiterResponse:TJSONObject = ObjectFrom(server.HandlePayload(formatRequest.SaveString(JSON_COMPACT))[0])
 Check(TJSONArray(delimiterResponse.Get("result")).Size() = 5, "LSP request applies configured brace, call, and declaration blank-line spacing")
+Local combinedSource:String = "SuperStrict~nFunction Probe()~nIf True Then Print ~qone~q~nIf True Then Print ~qtwo~q~nPrint ~qdone~q~nEnd Function~n"
+formatSettings.Set("formatInlineIfStyle", "expand")
+formatSettings.Set("formatControlBlankLines", "one")
+server.HandlePayload(changeRequest.SaveString(JSON_COMPACT))
+Local combinedDocument:TJSONObject = JsonObject()
+combinedDocument.Set("uri", "file:///tmp/format-combined.bmx")
+combinedDocument.Set("languageId", "blitzmax")
+combinedDocument.Set("version", 1)
+combinedDocument.Set("text", combinedSource)
+Local combinedOpenParams:TJSONObject = JsonObject()
+combinedOpenParams.Set("textDocument", combinedDocument)
+openRequest.Set("params", combinedOpenParams)
+server.HandlePayload(openRequest.SaveString(JSON_COMPACT))
+formatDocument.Set("uri", "file:///tmp/format-combined.bmx")
+rangeStart.Set("line", 2)
+rangeEnd.Set("line", 5)
+formatRequest.Set("method", "textDocument/rangeFormatting")
+formatRequest.Set("id", 6)
+Local combinedResponse:TJSONObject = ObjectFrom(server.HandlePayload(formatRequest.SaveString(JSON_COMPACT))[0])
+Local combinedEdits:TJSONArray = TJSONArray(combinedResponse.Get("result"))
+Check(combinedEdits.Size() = 4, "range formatting includes two inline expansions and their blank lines")
+Local expandedCount:Int
+Local blankCount:Int
+For Local index:Int = 0 Until combinedEdits.Size()
+	Local edit:TJSONObject = TJSONObject(combinedEdits.Get(index))
+	Local replacement:String = edit.GetString("newText")
+	If replacement.Find("End If") >= 0 Then expandedCount :+ 1
+	If replacement = "~n~n" Then blankCount :+ 1
+Next
+Check(expandedCount = 2 And blankCount = 2, "range edits contain both expanded If blocks and both blank-line changes")
 Local corpusCount:Int
 For Local index:Int = 1 Until AppArgs.length
 	Local path:String = AppArgs[index]
