@@ -1219,6 +1219,15 @@ Local conditionalIncbinC:String = TBlitzMaxCompiler.EmitRuntimeC(conditionalIncb
 Check(conditionalIncbin.Succeeded() And conditionalIncbinDiagnostics.length = 0 And conditionalIncbin.ir.incbins.length = 1 And conditionalIncbin.ir.incbins[0].path = "active.dat", "Incbin collection follows active conditional branches")
 Check(Contains(conditionalIncbinC, "&_ib_bb_main_1_data, _ib_bb_main_1_size"), "an active conditional Incbin receives the same deterministic application symbol and registration as a root directive")
 
+resolver.AddInclude("incbin-child.bmx", "Incbin ~qchild.dat~q~nInclude ~qincbin-grandchild.bmx~q")
+resolver.AddInclude("incbin-grandchild.bmx", "Incbin ~qgrandchild.dat~q")
+Local includedIncbin:TCompilerResult = TBlitzMaxCompiler.Compile("incbin-include-root.bmx", "SuperStrict~nIncbin ~qroot.dat~q~nInclude ~qincbin-child.bmx~q", resolver, TestOptions())
+Local includedIncbinDiagnostics:TCompilerDiagnostic[]
+Local includedIncbinC:String = TBlitzMaxCompiler.EmitRuntimeC(includedIncbin, includedIncbinDiagnostics)
+Check(includedIncbin.Succeeded() And includedIncbinDiagnostics.length = 0 And includedIncbin.ir.incbins.length = 3, "Incbin collection includes the complete recursive Include graph")
+Check(includedIncbin.ir.incbins[0].path = "root.dat" And includedIncbin.ir.incbins[1].path = "child.dat" And includedIncbin.ir.incbins[2].path = "grandchild.dat", "included Incbins retain deterministic root-first document order")
+Check(Contains(includedIncbinC, "&_ib_bb_main_1_data, _ib_bb_main_1_size") And Contains(includedIncbinC, "&_ib_bb_main_2_data, _ib_bb_main_2_size") And Contains(includedIncbinC, "&_ib_bb_main_3_data, _ib_bb_main_3_size"), "included Incbins emit matching declarations and runtime registrations")
+
 Local standaloneConstruction:TCompilerResult = TBlitzMaxCompiler.Compile("standalone-construction.bmx", "SuperStrict~nType TFactory~nEnd Type~nNew TFactory", resolver, TestOptions())
 Check(standaloneConstruction.Succeeded() And Contains(TCompilerIrDumper.Dump(standaloneConstruction.ir), "object-new @"), "standalone New expression is not rebound as a zero-argument command call")
 Local standaloneConstructionDiagnostics:TCompilerDiagnostic[]
