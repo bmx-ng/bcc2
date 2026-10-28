@@ -1965,6 +1965,10 @@ Local globalFunctionLiteral:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("S
 Check(globalFunctionLiteral.model.diagnostics.length = 0, "thin Function literal may read static Global state without capture")
 Local selfFunctionLiteral:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nType TCounter~nField amount:Int~nMethod Make:Int(value:Int)()~nReturn Function(value)~nReturn value + amount~nEnd Function~nEnd Method~nEnd Type", "self-function-literal.bmx")
 Check(HasDiagnostic(selfFunctionLiteral.model.diagnostics, "BMX3346"), "thin Function literal rejects implicit Self field capture")
+Local localFunctionCapture:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nFunction Read:Int(value:Int)~nLocal adjustment:Int=2~nFunction Captured:Int()~nReturn value+adjustment~nEnd Function~nReturn Captured()~nEnd Function", "local-function-capture.bmx")
+Check(HasDiagnostic(localFunctionCapture.model.diagnostics, "BMX3300"), "a static local Function cannot capture parameters or Locals from its enclosing routine")
+Local explicitLocalFunctionState:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nFunction Read:Int(value:Int)~nLocal adjustment:Int=2~nFunction Add:Int(left:Int,right:Int)~nReturn Double(left)+right~nEnd Function~nFunction Double:Int(input:Int)~nReturn input*2~nEnd Function~nReturn Add(value,adjustment)~nEnd Function", "explicit-local-function-state.bmx")
+Check(explicitLocalFunctionState.model.diagnostics.length = 0, "static local Functions accept enclosing state explicitly and retain sibling local-routine visibility")
 
 Local managedClosureAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nLocal add:Closure<Int(value:Int)> = Function(value)~nReturn value + 1~nEnd Function~nLocal answer:Int = add(41)~nLocal notify:Closure<()> = Function()~nEnd Function~nnotify()", "managed-closure-binding.bmx")
 Check(managedClosureAnalysis.model.diagnostics.length = 0, "non-capturing Function literals bind against explicit managed Closure targets")

@@ -2,16 +2,16 @@ SuperStrict
 
 Framework BRL.StandardIO
 
-Type TCapturedBoundary<T>
+Type TLocalRoutineBoundary<T>
 	Field base:Int
 
 	Method Compute:Int(value:Int)
 		Local adjustment:Int = 1
-		Function Add:Int(amount:Int = 1)
+		Function Add:Int(value:Int, adjustment:Int Var, base:Int, amount:Int = 1)
 			adjustment :+ amount
 			Return value + adjustment + base
 		End Function
-		Return Add()
+		Return Add(value, adjustment, base)
 	End Method
 End Type
 
@@ -37,9 +37,9 @@ Type TConcreteBoundary Extends TAbstractBoundary
 	End Method
 End Type
 
-Local captured:TCapturedBoundary<String> = New TCapturedBoundary<String>
-captured.base = 39
-If captured.Compute(1) <> 42 Then RuntimeError "local capture/default environment failed"
+Local localRoutine:TLocalRoutineBoundary<String> = New TLocalRoutineBoundary<String>
+localRoutine.base = 39
+If localRoutine.Compute(1) <> 42 Then RuntimeError "local explicit-state/default parameter failed"
 
 Local threadedInt:TThreadedBoundary<Int> = New TThreadedBoundary<Int>
 Local threadedString:TThreadedBoundary<String> = New TThreadedBoundary<String>
