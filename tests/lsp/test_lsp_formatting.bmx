@@ -139,9 +139,9 @@ Check(Formatted(caseInlineExpanded, "preserve", "preserve", "expand", 4, False, 
 Local loopSource:String = "SuperStrict~nFunction Probe()~nFor Local index:Int = 0 Until 2~nWhile True~nExit~nWend~nNext~nEnd Function~n"
 Check(Formatted(loopSource, "preserve", "preserve", "preserve", 4, False, True) = "SuperStrict~nFunction Probe()~n~tFor Local index:Int = 0 Until 2~n~t~tWhile True~n~t~t~tExit~n~t~tWend~n~tNext~nEnd Function~n", "nested For and While blocks indent and close at matching levels")
 Local comments:String = "SuperStrict~nFunction Probe()~n' deliberate comment indent~nPrint ~qx~q~nEnd Function~n"
-Check(Formatted(comments, "preserve", "preserve", "preserve", 4, False, True) = "SuperStrict~nFunction Probe()~n' deliberate comment indent~n~tPrint ~qx~q~nEnd Function~n", "comment-only lines are preserved")
+Check(Formatted(comments, "preserve", "preserve", "preserve", 4, False, True) = "SuperStrict~nFunction Probe()~n~t' deliberate comment indent~n~tPrint ~qx~q~nEnd Function~n", "comment-only lines align with following statements")
 Local blockComment:String = "SuperStrict~nFunction Probe()~nRem~n  comment body~nEnd Rem~nPrint ~qx~q~nEnd Function~n"
-Check(Formatted(blockComment, "preserve", "preserve", "preserve", 4, False, True) = "SuperStrict~nFunction Probe()~nRem~n  comment body~nEnd Rem~n~tPrint ~qx~q~nEnd Function~n", "block comment layout is preserved")
+Check(Formatted(blockComment, "preserve", "preserve", "preserve", 4, False, True) = "SuperStrict~nFunction Probe()~n~tRem~n~t  comment body~n~tEnd Rem~n~tPrint ~qx~q~nEnd Function~n", "Rem block shifts together and preserves relative spacing")
 Local nestedInline:String = "SuperStrict~nFunction Probe()~nIf True Then Print ~qx~q~nEnd Function~n"
 Check(Formatted(nestedInline, "preserve", "preserve", "expand", 4, False, True) = "SuperStrict~nFunction Probe()~n~tIf True Then~n~t~tPrint ~qx~q~n~tEnd If~nEnd Function~n", "inline expansion and indentation produce non-overlapping edits")
 Check(Formatted(Formatted(nestedInline, "preserve", "preserve", "expand", 4, False, True), "preserve", "preserve", "expand", 4, False, True) = Formatted(nestedInline, "preserve", "preserve", "expand", 4, False, True), "inline expansion and indentation are idempotent together")
@@ -325,14 +325,14 @@ openRequest.Set("params", openParams)
 server.HandlePayload(openRequest.SaveString(JSON_COMPACT))
 Local formatSettings:TJSONObject = JsonObject()
 formatSettings.Set("formatThenStyle", "add")
-formatSettings.Set("formatIndent", False)
-formatSettings.Set("formatSpaceAfterComma", False)
+formatSettings.Set("formatIndent", New TJSONBool.Create(False))
+formatSettings.Set("formatSpaceAfterComma", New TJSONBool.Create(False))
 formatSettings.Set("formatCaseIndent", "aligned")
 formatSettings.Set("formatMetadataBraceSpacing", "spaced")
 formatSettings.Set("formatCallParenSpacing", "compact")
 formatSettings.Set("formatAssignmentSpacing", "spaced")
 formatSettings.Set("formatBinarySpacing", "spaced")
-formatSettings.Set("formatTrimTrailingWhitespace", False)
+formatSettings.Set("formatTrimTrailingWhitespace", New TJSONBool.Create(False))
 formatSettings.Set("formatDeclarationBlankLines", "one")
 formatSettings.Set("formatControlBlankLines", "none")
 Local settingsRoot:TJSONObject = JsonObject()
@@ -437,6 +437,34 @@ For Local index:Int = 0 Until combinedEdits.Size()
 	If replacement = "~n~n" Then blankCount :+ 1
 Next
 Check(expandedCount = 2 And blankCount = 2, "range edits contain both expanded If blocks and both blank-line changes")
+formatSettings.Set("formatIndent", New TJSONBool.Create(True))
+server.HandlePayload(changeRequest.SaveString(JSON_COMPACT))
+Local commentRangeSource:String = "SuperStrict~nType TProbe~n' note~nMethod Run()~nRem~n  body~nEnd Rem~nPrint ~qx~q~nEnd Method~nEnd Type~n"
+Local commentRangeDocument:TJSONObject = JsonObject()
+commentRangeDocument.Set("uri", "file:///tmp/format-comments.bmx")
+commentRangeDocument.Set("languageId", "blitzmax")
+commentRangeDocument.Set("version", 1)
+commentRangeDocument.Set("text", commentRangeSource)
+Local commentRangeOpenParams:TJSONObject = JsonObject()
+commentRangeOpenParams.Set("textDocument", commentRangeDocument)
+openRequest.Set("params", commentRangeOpenParams)
+server.HandlePayload(openRequest.SaveString(JSON_COMPACT))
+formatDocument.Set("uri", "file:///tmp/format-comments.bmx")
+rangeStart.Set("line", 2)
+rangeEnd.Set("line", 8)
+formatRequest.Set("method", "textDocument/rangeFormatting")
+formatRequest.Set("id", 7)
+Local commentRangeResponse:TJSONObject = ObjectFrom(server.HandlePayload(formatRequest.SaveString(JSON_COMPACT))[0])
+Local commentRangeEdits:TJSONArray = TJSONArray(commentRangeResponse.Get("result"))
+Local commentLineEdit:Int
+Local remLineEdit:Int
+For Local index:Int = 0 Until commentRangeEdits.Size()
+	Local edit:TJSONObject = TJSONObject(commentRangeEdits.Get(index))
+	Local editStart:TJSONObject = TJSONObject(TJSONObject(edit.Get("range")).Get("start"))
+	If Int(editStart.GetInteger("line")) = 2 And edit.GetString("newText") = "~t" Then commentLineEdit = True
+	If Int(editStart.GetInteger("line")) = 4 And edit.GetString("newText") = "~t~t" Then remLineEdit = True
+Next
+Check(commentLineEdit And remLineEdit, "range formatting includes comment and Rem indentation edits")
 Local corpusCount:Int
 For Local index:Int = 1 Until AppArgs.length
 	Local path:String = AppArgs[index]
