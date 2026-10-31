@@ -2592,6 +2592,38 @@ Local importedCompoundOperatorC:String = TBlitzMaxCompiler.EmitRuntimeC(imported
 Check(publishedCompoundOperator.Succeeded() And publishedCompoundOperatorInterfaceDiagnostics.length = 0 And importedCompoundOperator.Succeeded() And Contains(importedCompoundOperatorDump, "call struct-direct"), "an imported Struct compound operator retains its published selected-call identity")
 Check(importedCompoundOperatorDiagnostics.length = 0 And Contains(importedCompoundOperatorC, "SPublishedAmount") And Contains(importedCompoundOperatorC, "((&bmx_v0_amount), 3);") And Not Contains(importedCompoundOperatorC, "bmx_v0_amount += 3"), "a consumer calls the dependency-owned mutating operator ABI without reproducing native assignment")
 
+Local indexedCompoundSource:String = "SuperStrict~nType TIndexedInt~nField value:Int=128~nMethod Operator []:Int(key:Int)~nReturn value~nEnd Method~nMethod Operator []=(key:Int, nextValue:Int)~nvalue=nextValue~nEnd Method~nEnd Type~nLocal values:TIndexedInt=New TIndexedInt~nvalues[0]:+2~nvalues[0]:-1~nvalues[0]:*3~nvalues[0]:/2~nvalues[0]:Mod 7~nvalues[0]:& 15~nvalues[0]:| 16~nvalues[0]:~~ 3~nvalues[0]:Shl 1~nvalues[0]:Shr 1~nvalues[0]:Sar 1"
+Local indexedCompound:TCompilerResult = TBlitzMaxCompiler.Compile("indexed-compound-assignment.bmx", indexedCompoundSource, resolver, TestOptions())
+Local indexedCompoundDiagnostics:TCompilerDiagnostic[]
+Local indexedCompoundC:String = TBlitzMaxCompiler.EmitRuntimeC(indexedCompound, indexedCompoundDiagnostics)
+Check(indexedCompound.Succeeded() And Not HasCompilerDiagnostic(indexedCompound, "BMXC1005"), "every scalar compound operator supports an overloaded index getter/setter target")
+Check(indexedCompoundDiagnostics.length = 0 And Occurrences(indexedCompoundC, "->m_cf0__iget(") >= 11 And Occurrences(indexedCompoundC, "->m_cf1__iset(") >= 11, "indexed scalar compounds read through Operator[] and write the result through Operator[]=")
+Local debugIndexedCompound:TCompilerResult = TBlitzMaxCompiler.Compile("debug-indexed-compound-assignment.bmx", indexedCompoundSource, resolver, DebugTestOptions())
+Local debugIndexedCompoundDiagnostics:TCompilerDiagnostic[]
+Local debugIndexedCompoundC:String = TBlitzMaxCompiler.EmitRuntimeC(debugIndexedCompound, debugIndexedCompoundDiagnostics)
+Check(debugIndexedCompound.Succeeded() And debugIndexedCompoundDiagnostics.length = 0 And debugIndexedCompoundC.length > 0, "debug lowering supports the complete overloaded indexed compound operator matrix")
+
+Local managedIndexedCompound:TCompilerResult = TBlitzMaxCompiler.Compile("managed-indexed-compound-assignment.bmx", "SuperStrict~nType TIndexedString~nField value:String~nMethod Operator []:String(key:Int)~nReturn value~nEnd Method~nMethod Operator []=(key:Int, nextValue:String)~nvalue=nextValue~nEnd Method~nEnd Type~nLocal values:TIndexedString=New TIndexedString~nvalues[0]:+~qx~q", resolver, TestOptions())
+Local managedIndexedCompoundDiagnostics:TCompilerDiagnostic[]
+Local managedIndexedCompoundC:String = TBlitzMaxCompiler.EmitRuntimeC(managedIndexedCompound, managedIndexedCompoundDiagnostics)
+Check(managedIndexedCompound.Succeeded() And managedIndexedCompoundDiagnostics.length = 0 And Contains(managedIndexedCompoundC, "bbStringConcat("), "String :+ uses the ordinary managed concatenation path before calling an overloaded index setter")
+
+Local arrayIndexedCompound:TCompilerResult = TBlitzMaxCompiler.Compile("array-indexed-compound-assignment.bmx", "SuperStrict~nType TIndexedArray~nField value:Int[]~nMethod Operator []:Int[](key:Int)~nReturn value~nEnd Method~nMethod Operator []=(key:Int, nextValue:Int[])~nvalue=nextValue~nEnd Method~nEnd Type~nLocal values:TIndexedArray=New TIndexedArray~nvalues[0]:+[1,2]", resolver, TestOptions())
+Local arrayIndexedCompoundDiagnostics:TCompilerDiagnostic[]
+Local arrayIndexedCompoundC:String = TBlitzMaxCompiler.EmitRuntimeC(arrayIndexedCompound, arrayIndexedCompoundDiagnostics)
+Check(arrayIndexedCompound.Succeeded() And arrayIndexedCompoundDiagnostics.length = 0 And Contains(arrayIndexedCompoundC, "bbArrayConcat("), "Array :+ uses the ordinary managed concatenation path before calling an overloaded index setter")
+
+Local userOperatorIndexedCompound:TCompilerResult = TBlitzMaxCompiler.Compile("user-operator-indexed-compound-assignment.bmx", "SuperStrict~nStruct SIndexedAmount~nField value:Int~nMethod Operator :+:SIndexedAmount(delta:Int)~nvalue:+delta~nReturn Self~nEnd Method~nEnd Struct~nType TIndexedAmount~nField value:SIndexedAmount~nMethod Operator []:SIndexedAmount(key:Int)~nReturn value~nEnd Method~nMethod Operator []=(key:Int, nextValue:SIndexedAmount)~nvalue=nextValue~nEnd Method~nEnd Type~nLocal values:TIndexedAmount=New TIndexedAmount~nvalues[0]:+3", resolver, TestOptions())
+Local userOperatorIndexedCompoundDiagnostics:TCompilerDiagnostic[]
+Local userOperatorIndexedCompoundC:String = TBlitzMaxCompiler.EmitRuntimeC(userOperatorIndexedCompound, userOperatorIndexedCompoundDiagnostics)
+Check(userOperatorIndexedCompound.Succeeded() And userOperatorIndexedCompoundDiagnostics.length = 0 And Contains(userOperatorIndexedCompoundC, "bmx_fn2__addeq(") And Contains(userOperatorIndexedCompoundC, "->m_cf1__iset("), "an indexed compound applies a selected user-defined mutating operator and stores its returned value: " + CompilerDiagnosticSummary(userOperatorIndexedCompound) + "; emission: " + EmissionDiagnosticSummary(userOperatorIndexedCompoundDiagnostics))
+
+Local singleEvaluationIndexedCompound:TCompilerResult = TBlitzMaxCompiler.Compile("single-evaluation-indexed-compound.bmx", "SuperStrict~nType TIndexedValue~nField value:Int~nMethod Operator []:Int(key:Int)~nReturn value~nEnd Method~nMethod Operator []=(key:Int, nextValue:Int)~nvalue=nextValue~nEnd Method~nEnd Type~nGlobal values:TIndexedValue=New TIndexedValue~nFunction Values:TIndexedValue()~nReturn values~nEnd Function~nFunction Key:Int()~nReturn 0~nEnd Function~nValues()[Key()]:+1", resolver, TestOptions())
+Local singleEvaluationIndexedCompoundDiagnostics:TCompilerDiagnostic[]
+Local singleEvaluationIndexedCompoundC:String = TBlitzMaxCompiler.EmitRuntimeC(singleEvaluationIndexedCompound, singleEvaluationIndexedCompoundDiagnostics)
+Check(singleEvaluationIndexedCompound.Succeeded() And singleEvaluationIndexedCompoundDiagnostics.length = 0, "side-effect-capable indexed compound receivers and keys lower successfully")
+Check(Occurrences(CFunctionSection(singleEvaluationIndexedCompoundC, "_bb_main("), "bmx_fn0_Values()") = 1 And Occurrences(CFunctionSection(singleEvaluationIndexedCompoundC, "_bb_main("), "bmx_fn1_Key()") = 1, "an overloaded indexed compound evaluates its receiver and key exactly once")
+
 Local assignmentOperatorCall:TCompilerResult = TBlitzMaxCompiler.Compile("assignment-operator-call.bmx", "SuperStrict~nType TMutableValue~nField value:Int~nMethod Operator :=:TMutableValue(nextValue:Int)~nvalue=nextValue~nReturn Self~nEnd Method~nEnd Type~nLocal current:TMutableValue=New TMutableValue~ncurrent=42", resolver, TestOptions())
 Local assignmentOperatorCallDump:String = TCompilerIrDumper.Dump(assignmentOperatorCall.ir)
 Local assignmentOperatorCallDiagnostics:TCompilerDiagnostic[]

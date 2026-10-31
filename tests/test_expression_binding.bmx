@@ -469,6 +469,15 @@ Local selectedDeclaration:TVariableDeclarationStatementSyntax = TVariableDeclara
 Local getIndex:TIndexExpressionSyntax = TIndexExpressionSyntax(selectedDeclaration.declarators[0].initializer)
 Check(operatorModel.ResolvedCall(getIndex).routine.name = "[]" And operatorModel.ExpressionType(getIndex) = operatorModel.BuiltinType("String"), "generic named index getter type")
 Check(operatorModel.ResolvedIndex(getIndex).accessKind = INDEX_ACCESS_OPERATOR, "user-defined indexing remains distinct from array and pointer access")
+
+Local compoundIndexSource:String = "SuperStrict~nType TCompoundIndex~nField value:Int~nMethod Operator []:Int(key:Int)~nReturn value~nEnd Method~nMethod Operator []=(key:Int, nextValue:Int)~nvalue=nextValue~nEnd Method~nEnd Type~nLocal values:TCompoundIndex=New TCompoundIndex~nvalues[0]:+1"
+Local compoundIndexParse:TParseResult = TBlitzMaxParser.ParseText(compoundIndexSource, "compound-index-binding.bmx")
+Local compoundIndexModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(compoundIndexParse.syntaxTree)
+TExpressionBinder.Bind(compoundIndexModel)
+Local compoundIndexAssignment:TAssignmentStatementSyntax = TAssignmentStatementSyntax(compoundIndexParse.syntaxTree.root.members[3])
+Local compoundIndexExpression:TIndexExpressionSyntax = TIndexExpressionSyntax(compoundIndexAssignment.left)
+Check(compoundIndexModel.diagnostics.length = 0 And compoundIndexModel.ResolvedIndex(compoundIndexExpression).resolvedCall.routine.name = "[]" And compoundIndexModel.ResolvedIndex(compoundIndexAssignment).resolvedCall.routine.name = "[]=", "compound indexed assignment retains both its getter and setter overloads")
+
 Local sumDeclaration:TVariableDeclarationStatementSyntax = TVariableDeclarationStatementSyntax(operatorParse.syntaxTree.root.members[8])
 Local sumExpression:TBinaryExpressionSyntax = TBinaryExpressionSyntax(sumDeclaration.declarators[0].initializer)
 Check(operatorModel.ResolvedCall(sumExpression).routine.name = "+" And operatorModel.ExpressionType(sumExpression).DisplayName() = "SAmount", "binary operator binding")
