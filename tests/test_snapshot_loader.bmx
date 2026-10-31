@@ -25,6 +25,21 @@ Function DiagnosticCount:Int(diagnostics:TDiagnostic[], code:String)
 	Return count
 End Function
 
+Function SnapshotHasDiagnostic:Int(diagnostics:TSnapshotDiagnostic[], code:String)
+	For Local diagnostic:TSnapshotDiagnostic = EachIn diagnostics
+		If diagnostic.code = code Then Return True
+	Next
+	Return False
+End Function
+
+Function SnapshotDiagnosticCount:Int(diagnostics:TSnapshotDiagnostic[], code:String)
+	Local count:Int
+	For Local diagnostic:TSnapshotDiagnostic = EachIn diagnostics
+		If diagnostic.code = code Then count :+ 1
+	Next
+	Return count
+End Function
+
 Type TMemorySnapshotResolver Extends TSnapshotResolver
 	Field includes:TMap = New TMap
 	Field interfaces:TMap = New TMap
@@ -87,7 +102,7 @@ Local options:TCompilationSnapshotOptions = New TCompilationSnapshotOptions
 options.targetPlatform = "win32"
 options.conditionalSymbols = ["win32", "ptr64"]
 
-Local rootSource:String = "SuperStrict~nInclude ~qshared.bmx~q~nImport example.api~nImport ~qglue.c~q~nGlobal direct:TExample~nGlobal qualified:example.api.TExample~nLocal selected:Int = direct[0]~ndirect[0] = selected~n?win32~nInclude ~qwin.bmx~q~n?~n?bmxng~nGlobal CurrentCompiler:Int = True~n?Not bmxng~nImport absent.legacy~nGlobal LegacyCompiler:Int = True~n?~n?bmxng2~nGlobal CurrentLanguageGeneration:Int = True~n?Not bmxng2~nImport absent.previousgeneration~n?~nLocal fileKind:Int = example.api.FileType(~qpath~q)~nMemCopy(Null, Null, Size_T(1))~nType TOverrideObjectMethod Extends TExample~nMethod ToString:String() Override~nReturn ~qexample~q~nEnd Method~nEnd Type~n"
+Local rootSource:String = "SuperStrict~nImport example.api~nImport ~qglue.c~q~nInclude ~qshared.bmx~q~nGlobal direct:TExample~nGlobal qualified:example.api.TExample~nLocal selected:Int = direct[0]~ndirect[0] = selected~n?win32~nInclude ~qwin.bmx~q~n?~n?bmxng~nGlobal CurrentCompiler:Int = True~n?Not bmxng~nImport absent.legacy~nGlobal LegacyCompiler:Int = True~n?~n?bmxng2~nGlobal CurrentLanguageGeneration:Int = True~n?Not bmxng2~nImport absent.previousgeneration~n?~nLocal fileKind:Int = example.api.FileType(~qpath~q)~nMemCopy(Null, Null, Size_T(1))~nType TOverrideObjectMethod Extends TExample~nMethod ToString:String() Override~nReturn ~qexample~q~nEnd Method~nEnd Type~n"
 Local snapshot:TCompilationSnapshot = TCompilationSnapshotBuilder.Build("src/main.bmx", rootSource, resolver, options)
 Check(snapshot.succeeded, "complete snapshot succeeds")
 Check(snapshot.rootDocument <> Null And snapshot.rootDocument.path = "src/main.bmx", "snapshot root document")
@@ -100,6 +115,31 @@ Check(snapshot.rootDocument.imports[0].target.logicalName = "example.api", "reso
 Check(snapshot.rootDocument.imports[1].target.logicalName = "brl.blitz" And snapshot.rootDocument.imports[1].syntax = Null, "implicit brl.blitz import")
 Check(snapshot.rootDocument.imports[0].target.imports.length = 1, "transitive interface import")
 Check(snapshot.documents[1].imports.length = 1, "import from included source")
+
+Local modulePreamble:TCompilationSnapshot = TCompilationSnapshotBuilder.Build("src/preamble.bmx", "SuperStrict~nNoDebug~nModule Example.Preamble~nModuleInfo ~qVersion: 1.00~q~nImport support.api", resolver, options)
+Check(modulePreamble.succeeded And Not SnapshotHasDiagnostic(modulePreamble.diagnostics, "BMX4015"), "source, debug, Module and ModuleInfo preamble directives keep the import section open")
+
+Local lateDirect:TCompilationSnapshot = TCompilationSnapshotBuilder.Build("src/late-direct.bmx", "SuperStrict~nLocal value:Int~nImport absent.module", resolver, options)
+Check(Not lateDirect.succeeded And SnapshotDiagnosticCount(lateDirect.diagnostics, "BMX4015") = 1, "direct imports after ordinary source are rejected")
+Check(SnapshotDiagnosticCount(lateDirect.diagnostics, "BMX4003") = 0, "invalid late imports do not attempt interface resolution")
+
+Local lateIncludeResolver:TMemorySnapshotResolver = New TMemorySnapshotResolver
+lateIncludeResolver.core = resolver.core
+lateIncludeResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", "superstrict")
+lateIncludeResolver.AddInclude("late-import.bmx", "Import absent.module")
+Local lateIncluded:TCompilationSnapshot = TCompilationSnapshotBuilder.Build("src/late-included.bmx", "SuperStrict~nLocal value:Int~nInclude ~qlate-import.bmx~q", lateIncludeResolver, options)
+Check(Not lateIncluded.succeeded And SnapshotDiagnosticCount(lateIncluded.diagnostics, "BMX4015") = 1, "imports textually included after ordinary source are rejected")
+Check(SnapshotDiagnosticCount(lateIncluded.diagnostics, "BMX4003") = 0 And lateIncluded.diagnostics[0].path = "late-import.bmx", "late included imports retain their source location without interface follow-on errors")
+
+lateIncludeResolver.AddInclude("inactive-late-import.bmx", "?win32~nImport absent.module~n?")
+Local inactiveLateOptions:TCompilationSnapshotOptions = New TCompilationSnapshotOptions
+inactiveLateOptions.targetPlatform = "linux"
+Local inactiveLateIncluded:TCompilationSnapshot = TCompilationSnapshotBuilder.Build("src/inactive-late-included.bmx", "SuperStrict~nLocal value:Int~nInclude ~qinactive-late-import.bmx~q", lateIncludeResolver, inactiveLateOptions)
+Check(inactiveLateIncluded.succeeded And Not SnapshotHasDiagnostic(inactiveLateIncluded.diagnostics, "BMX4015"), "inactive conditional imports do not violate textual placement")
+
+lateIncludeResolver.AddInclude("repeated-import.bmx", "Import brl.blitz")
+Local repeatedLateIncluded:TCompilationSnapshot = TCompilationSnapshotBuilder.Build("src/repeated-late-included.bmx", "SuperStrict~nInclude ~qrepeated-import.bmx~q~nLocal value:Int~nInclude ~qrepeated-import.bmx~q", lateIncludeResolver, options)
+Check(Not repeatedLateIncluded.succeeded And SnapshotDiagnosticCount(repeatedLateIncluded.diagnostics, "BMX4015") = 1, "cached included documents replay textual import placement at every Include site")
 
 Local configuredResolver:TMemorySnapshotResolver = New TMemorySnapshotResolver
 configuredResolver.core = resolver.core
