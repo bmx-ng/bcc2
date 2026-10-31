@@ -108,6 +108,15 @@ Function HasLanguageDiagnostic:Int(result:TCompilerResult, code:String)
 	Return False
 End Function
 
+Function LanguageDiagnosticCount:Int(result:TCompilerResult, code:String)
+	If Not result Or Not result.analysis Or Not result.analysis.model Then Return 0
+	Local count:Int
+	For Local diagnostic:TDiagnostic = EachIn result.analysis.model.diagnostics
+		If diagnostic.code = code Then count :+ 1
+	Next
+	Return count
+End Function
+
 Function HasSyntaxDiagnostic:Int(result:TCompilerResult, code:String)
 	If Not result Or Not result.analysis Or Not result.analysis.syntaxTree Then Return False
 	For Local diagnostic:TDiagnostic = EachIn result.analysis.syntaxTree.diagnostics
@@ -1511,8 +1520,8 @@ Check(arrayEachInDiagnostics.length = 0, "runtime backend emits managed Array Ea
 Check(Contains(arrayEachInC, "BBARRAY bmx_tmp_") And Contains(arrayEachInC, " = bmx_fn0_MakeValues();") And Contains(arrayEachInC, "BBUINT bmx_tmp_") And Contains(arrayEachInC, "< (BBUINT)bmx_tmp_") And Contains(arrayEachInC, "BBARRAYDATA("), "runtime C evaluates the collection once and iterates with hidden unsigned index storage")
 Check(Contains(arrayEachInC, "BBSTRING bmx_") And Contains(arrayEachInC, "BBARRAY bmx_") And Contains(arrayEachInC, "goto bmx_loop0_continue;") And Contains(arrayEachInC, "goto bmx_loop0_exit;"), "runtime C uses typed element cells and the shared loop-control contract")
 
-Local incompatibleTypedArrayEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("incompatible-typed-array-eachin.bmx", "SuperStrict~nType TFoo~nEnd Type~nType TBar~nEnd Type~nLocal values:TFoo[]=[New TFoo]~nFor Local value:TBar=EachIn values~nNext", resolver, TestOptions())
-Check(HasLanguageDiagnostic(incompatibleTypedArrayEachIn, "BMX3339"), "typed Array EachIn rejects unrelated object Types during semantic analysis: " + CompilerDiagnosticSummary(incompatibleTypedArrayEachIn))
+Local incompatibleTypedArrayEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("incompatible-typed-array-eachin.bmx", "SuperStrict~nType TFoo~nEnd Type~nType TBar~nEnd Type~nLocal values:TFoo[]=[New TFoo]~nFor Local value:TBar=EachIn values~nNext~nFor Local number:Int=EachIn values~nNext~nFor Local text:String=EachIn values~nNext", resolver, TestOptions())
+Check(LanguageDiagnosticCount(incompatibleTypedArrayEachIn, "BMX3339") = 3, "typed Array EachIn rejects unrelated object, numeric and String Types during semantic analysis: " + CompilerDiagnosticSummary(incompatibleTypedArrayEachIn))
 
 Local relatedTypedArrayEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("related-typed-array-eachin.bmx", "SuperStrict~nType TBase~nEnd Type~nType TDerived Extends TBase~nEnd Type~nLocal values:TBase[]=[New TDerived]~nFor Local value:TDerived=EachIn values~nNext", resolver, TestOptions())
 Check(relatedTypedArrayEachIn.Succeeded(), "typed Array EachIn retains production-compatible related downcasts")
@@ -2651,12 +2660,15 @@ Local debugManagedConversionC:String = TBlitzMaxCompiler.EmitRuntimeC(debugManag
 Check(debugManagedConversion.Succeeded() And debugManagedConversionDiagnostics.length = 0, "debug managed conversions lower successfully")
 Check(Contains(debugManagedConversionC, "bbArrayCastFromObject((BBOBJECT)") And Occurrences(debugManagedConversionC, "bbManagedArrayAssert((BBARRAY)") >= 3, "debug Array truth, length, and EachIn validate the managed sentinel family before use")
 Check(Contains(debugManagedConversionC, "bbObjectStringcast((BBOBJECT)") And Occurrences(debugManagedConversionC, "bbManagedStringAssert((BBSTRING)") >= 2, "debug String truth and length validate the managed sentinel family before use")
-Local eachInAdaptationSource:String = "SuperStrict~nType TDefaultProtocolIterator~nMethod HasNext:Int(step:Int=1)~nReturn False~nEnd Method~nMethod NextObject:Object(index:Int=0)~nReturn Null~nEnd Method~nEnd Type~nType TDefaultProtocolValues~nMethod ObjectEnumerator:TDefaultProtocolIterator(seed:Int=0)~nReturn New TDefaultProtocolIterator~nEnd Method~nEnd Type~nLocal objects:Object[]=[~qtext~q]~nFor Local text:String=EachIn objects~nNext~nLocal values:TDefaultProtocolValues=New TDefaultProtocolValues~nFor Local text:String=EachIn values~nNext~nFor Local number:Int=EachIn values~nNext"
+Local eachInAdaptationSource:String = "SuperStrict~nType TDefaultProtocolIterator~nMethod HasNext:Int(step:Int=1)~nReturn False~nEnd Method~nMethod NextObject:Object(index:Int=0)~nReturn Null~nEnd Method~nEnd Type~nType TDefaultProtocolValues~nMethod ObjectEnumerator:TDefaultProtocolIterator(seed:Int=0)~nReturn New TDefaultProtocolIterator~nEnd Method~nEnd Type~nLocal objects:Object[]=[~qtext~q]~nFor Local text:String=EachIn objects~nNext~nLocal values:TDefaultProtocolValues=New TDefaultProtocolValues~nFor Local text:String=EachIn values~nNext"
 Local eachInAdaptation:TCompilerResult = TBlitzMaxCompiler.Compile("eachin-adaptation.bmx", eachInAdaptationSource, resolver, TestOptions())
-Check(eachInAdaptation.Succeeded(), "Array and ObjectEnumerator EachIn lower Object-to-String/numeric adaptation and defaulted protocol parameters")
+Check(eachInAdaptation.Succeeded(), "Array and ObjectEnumerator EachIn lower Object-to-String adaptation and defaulted protocol parameters")
 Local eachInAdaptationDiagnostics:TCompilerDiagnostic[]
 Local eachInAdaptationC:String = TBlitzMaxCompiler.EmitRuntimeC(eachInAdaptation, eachInAdaptationDiagnostics)
-Check(eachInAdaptationDiagnostics.length = 0 And Contains(eachInAdaptationC, "bbObjectIsString") And Contains(eachInAdaptationC, "bbObjectStringcast") And Contains(eachInAdaptationC, "bbObjectToFieldOffset") And Contains(eachInAdaptationC, ", 0)") And Contains(eachInAdaptationC, ", 1)"), "runtime C emits production legacy adaptation and every retained protocol default")
+Check(eachInAdaptationDiagnostics.length = 0 And Contains(eachInAdaptationC, "bbObjectIsString") And Contains(eachInAdaptationC, "bbObjectStringcast") And Not Contains(eachInAdaptationC, "bbObjectToFieldOffset") And Contains(eachInAdaptationC, ", 0)") And Contains(eachInAdaptationC, ", 1)"), "runtime C emits production String adaptation and every retained protocol default")
+Local objectNumericEachInSource:String = "SuperStrict~nType TObjectIterator~nMethod HasNext:Int()~nReturn False~nEnd Method~nMethod NextObject:Object()~nReturn Null~nEnd Method~nEnd Type~nType TObjectValues~nMethod ObjectEnumerator:TObjectIterator()~nReturn New TObjectIterator~nEnd Method~nEnd Type~nLocal objects:Object[]~nFor Local arrayNumber:Int=EachIn objects~nNext~nFor Local enumeratedNumber:Int=EachIn New TObjectValues~nNext"
+Local objectNumericEachIn:TCompilerResult = TBlitzMaxCompiler.Compile("object-numeric-eachin.bmx", objectNumericEachInSource, resolver, TestOptions())
+Check(LanguageDiagnosticCount(objectNumericEachIn, "BMX3339") = 2, "Object Array and ObjectEnumerator EachIn reject primitive targets without boxing: " + CompilerDiagnosticSummary(objectNumericEachIn))
 
 Local interfaceSource:String = "SuperStrict~nInterface IReadable~nMethod Read:Int(delta:Int)~nEnd Interface~nInterface INamed~nMethod Name:String()~nEnd Interface~nType TItem Implements IReadable, INamed~nField base:Int~nMethod Read:Int(delta:Int)~nReturn base + delta~nEnd Method~nMethod Name:String()~nReturn ~qitem~q~nEnd Method~nEnd Type~nType TSpecial Extends TItem~nMethod Read:Int(delta:Int) Override~nReturn base + delta + 1~nEnd Method~nEnd Type~nLocal item:TItem = New TItem~nitem.base = 40~nLocal readable:IReadable = item~nLocal named:INamed = item~nLocal result:Int = readable.Read(2)~nLocal label:String = named.Name()~nLocal same:Int = readable = named~nLocal special:TSpecial = New TSpecial~nspecial.base = 40~nLocal specialReadable:IReadable = special~nLocal specialResult:Int = specialReadable.Read(2)~nIf readable Then result = result + 1"
 Local interfaceDispatch:TCompilerResult = TBlitzMaxCompiler.Compile("interface-dispatch.bmx", interfaceSource, resolver, TestOptions())
