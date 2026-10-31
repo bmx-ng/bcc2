@@ -260,6 +260,30 @@ Local importedGlyph:TSymbol = TNamedSemanticType(importedOwnedSource.model.globa
 Check(importedOwnedSource.Succeeded() And importedGlyph.originModule = "acme.multisource", "a quoted source interface contributes declarations to its importing module rather than a filename-shaped nominal module")
 Check(importedGlyph.originPath.EndsWith("/common.bmx") And importedGlyph.originLine = 42, "an imported owned declaration retains its quoted-source provenance")
 
+Local duplicateSourceRoutineResolver:TMemorySnapshotResolver = New TMemorySnapshotResolver
+duplicateSourceRoutineResolver.core = resolver.core
+duplicateSourceRoutineResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", "superstrict")
+duplicateSourceRoutineResolver.AddInterfaceFile("first.bmx", "src/.bmx/first.release.test.i", TBlitzMaxSourceInterfaceBuilder.Build("src/first.bmx", "SuperStrict~nFunction SharedRoutine:Int(value:Int)~nReturn value~nEnd Function"))
+duplicateSourceRoutineResolver.AddInterfaceFile("second.bmx", "src/.bmx/second.release.test.i", TBlitzMaxSourceInterfaceBuilder.Build("src/second.bmx", "SuperStrict~nFunction SharedRoutine:Int(value:Int)~nReturn value + 1~nEnd Function"))
+Local duplicateSourceRoutine:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/source-import-duplicates.bmx", "SuperStrict~nImport ~qfirst.bmx~q~nImport ~qsecond.bmx~q", duplicateSourceRoutineResolver, options)
+Check(DiagnosticCount(duplicateSourceRoutine.model.diagnostics, "BMX3000") = 1, "quoted source imports reject identical application-owned routine signatures before their object files collide")
+
+Local distinctSourceRoutineResolver:TMemorySnapshotResolver = New TMemorySnapshotResolver
+distinctSourceRoutineResolver.core = resolver.core
+distinctSourceRoutineResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", "superstrict")
+distinctSourceRoutineResolver.AddInterfaceFile("first.bmx", "src/.bmx/first.release.test.i", TBlitzMaxSourceInterfaceBuilder.Build("src/first.bmx", "SuperStrict~nFunction SharedRoutine:Int(value:Int)~nReturn value~nEnd Function"))
+distinctSourceRoutineResolver.AddInterfaceFile("second.bmx", "src/.bmx/second.release.test.i", TBlitzMaxSourceInterfaceBuilder.Build("src/second.bmx", "SuperStrict~nFunction SharedRoutine:String(value:String)~nReturn value~nEnd Function"))
+Local distinctSourceRoutine:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/source-import-overloads.bmx", "SuperStrict~nImport ~qfirst.bmx~q~nImport ~qsecond.bmx~q", distinctSourceRoutineResolver, options)
+Check(Not HasDiagnostic(distinctSourceRoutine.model.diagnostics, "BMX3000"), "quoted source imports retain distinct overload signatures")
+
+Local separateModuleRoutineResolver:TMemorySnapshotResolver = New TMemorySnapshotResolver
+separateModuleRoutineResolver.core = resolver.core
+separateModuleRoutineResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", "superstrict")
+separateModuleRoutineResolver.AddInterface("first.module", "sdk/first.module.i", "superstrict~nSharedRoutine%(value%)=~qfirst_module_SharedRoutine__Bint~q")
+separateModuleRoutineResolver.AddInterface("second.module", "sdk/second.module.i", "superstrict~nSharedRoutine%(value%)=~qsecond_module_SharedRoutine__Bint~q")
+Local separateModuleRoutine:TLanguageAnalysis = TBlitzMaxLanguage.BuildAndAnalyze("src/module-import-overlaps.bmx", "SuperStrict~nImport first.module~nImport second.module", separateModuleRoutineResolver, options)
+Check(Not HasDiagnostic(separateModuleRoutine.model.diagnostics, "BMX3000"), "identical signatures from separate nominal modules remain independent declarations")
+
 Local resolutionOptions:TTypeResolutionOptions = New TTypeResolutionOptions
 resolutionOptions.reportUnresolvedTypes = True
 Local semanticModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.AnalyzeSnapshot(snapshot, resolutionOptions)

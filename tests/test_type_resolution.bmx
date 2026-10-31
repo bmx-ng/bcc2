@@ -15,6 +15,14 @@ Function FindDiagnostic:Int(diagnostics:TDiagnostic[], code:String)
 	Return False
 End Function
 
+Function DiagnosticCount:Int(diagnostics:TDiagnostic[], code:String)
+	Local count:Int
+	For Local diagnostic:TDiagnostic = EachIn diagnostics
+		If diagnostic.code = code Then count :+ 1
+	Next
+	Return count
+End Function
+
 Local source:String = "SuperStrict~nInterface IMarker~nEnd Interface~nType TPair<K, V>~nField First:K~nField Second:V~nEnd Type~nType TOuter~nType TInner~nEnd Type~nEnd Type~nType TDerived<T> Extends TPair<T, Int> Implements IMarker~nField items:TPair<String, T>[][]~nField matrix:Int[,,]~nField address:Byte Ptr Ptr~nField arrayAddress:Int Ptr[] Ptr~nField bad:TPair<Int>~nMethod Map:TPair<T, TOuter.TInner>(value%, text$)~nReturn Null~nEnd Method~nEnd Type~nEnum EState:Byte~nReady~nEnd Enum~nGlobal missing:MissingType"
 Local parsed:TParseResult = TBlitzMaxParser.ParseText(source, "types.bmx")
 Check(parsed.syntaxTree.diagnostics.length = 0, "type-resolution parser diagnostics")
@@ -146,6 +154,14 @@ For Local diagnostic:TDiagnostic = EachIn ambiguousModel.diagnostics
 Next
 Check(detailedAmbiguity, "ambiguous type diagnostic identifies its candidates")
 Check(TErrorSemanticType(ambiguousModel.globalScope.LookupLocal("conflict")[0].declaredType) <> Null, "ambiguous reference error type")
+
+Local duplicateRoutineSource:String = "SuperStrict~nFunction GlobalDuplicate()~nEnd Function~nFunction GlobalDuplicate()~nEnd Function~nFunction ReturnOnly:Int(value:Int)~nEnd Function~nFunction ReturnOnly:String(value:Int)~nEnd Function~nFunction OptionalDuplicate(value:Int=1)~nEnd Function~nFunction OptionalDuplicate(value:Int=2)~nEnd Function~nFunction GenericDuplicate<T>:T(value:T)~nReturn value~nEnd Function~nFunction GenericDuplicate<U>:U(value:U)~nReturn value~nEnd Function~nFunction Outer()~nFunction LocalDuplicate()~nEnd Function~nFunction LocalDuplicate()~nEnd Function~nEnd Function~nType TRoutineDuplicates~nMethod MethodDuplicate()~nEnd Method~nMethod MethodDuplicate()~nEnd Method~nFunction TypeFunctionDuplicate()~nEnd Function~nFunction TypeFunctionDuplicate()~nEnd Function~nMethod MixedDuplicate(value:Int)~nEnd Method~nFunction MixedDuplicate(value:Int)~nEnd Function~nMethod New(value:Int)~nEnd Method~nMethod New(value:Int)~nEnd Method~nMethod Operator +:TRoutineDuplicates(value:Int)~nReturn Self~nEnd Method~nMethod Operator +:TRoutineDuplicates(value:Int)~nReturn Self~nEnd Method~nEnd Type~nStruct SRoutineDuplicates~nMethod MethodDuplicate()~nEnd Method~nMethod MethodDuplicate()~nEnd Method~nFunction StructFunctionDuplicate()~nEnd Function~nFunction StructFunctionDuplicate()~nEnd Function~nMethod New(value:Int)~nEnd Method~nMethod New(value:Int)~nEnd Method~nEnd Struct~nInterface IRoutineDuplicates~nMethod MethodDuplicate()~nMethod MethodDuplicate()~nEnd Interface~nExtern~nFunction NativeDuplicate:Int(value:Int)~nFunction NativeDuplicate:Int(value:Int)~nEnd Extern"
+Local duplicateRoutineModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(TBlitzMaxParser.ParseText(duplicateRoutineSource, "duplicate-routines.bmx").syntaxTree)
+Check(DiagnosticCount(duplicateRoutineModel.diagnostics, "BMX3000") = 15, "identical routine signatures are rejected across global, local, Type, Struct, Interface, constructor, operator, generic, optional, and Extern declarations")
+
+Local distinctRoutineSource:String = "SuperStrict~nFunction Overload(value:Int)~nEnd Function~nFunction Overload(value:String)~nEnd Function~nFunction Overload(value:Int, extra:Int)~nEnd Function~nFunction ByMode(value:Int)~nEnd Function~nFunction ByMode(value:Int Var)~nEnd Function~nFunction GenericChoice(value:Int)~nEnd Function~nFunction GenericChoice<T>(value:Int)~nEnd Function~nFunction GenericArity<T>(value:T)~nEnd Function~nFunction GenericArity<T, U>(value:T)~nEnd Function~nFunction Apply(callback:Int(value:Int))~nEnd Function~nFunction Apply(callback:String(value:String))~nEnd Function~nType TFirstScope~nMethod Shared(value:Int)~nEnd Method~nEnd Type~nType TSecondScope~nMethod Shared(value:Int)~nEnd Method~nEnd Type~nType TBaseScope~nMethod OverrideMe(value:Int)~nEnd Method~nEnd Type~nType TDerivedScope Extends TBaseScope~nMethod OverrideMe(value:Int) Override~nEnd Method~nEnd Type"
+Local distinctRoutineModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(TBlitzMaxParser.ParseText(distinctRoutineSource, "distinct-routines.bmx").syntaxTree)
+Check(distinctRoutineModel.diagnostics.length = 0, "parameter type, arity, Var mode, generic arity, callable signature, lexical scope, and inheritance retain distinct routine declarations")
 
 Local dump:String = TSemanticDumper.Dump(model)
 Check(dump.Contains("Field matrix : Int[,,]"), "semantic dump resolved field type")
