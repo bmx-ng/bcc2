@@ -1312,6 +1312,18 @@ Local mixedCaseFallbackHeaderDiagnostics:TCompilerDiagnostic[]
 Local mixedCaseFallbackHeader:String = TBlitzMaxCompiler.EmitRuntimeHeader(mixedCaseFallback, mixedCaseFallbackHeaderDiagnostics)
 Check(mixedCaseFallback.Succeeded() And mixedCaseFallbackHeaderDiagnostics.length = 0 And Contains(mixedCaseFallbackHeader, "#include <source/Fallback/.bmx/Helper.bmx.release.test.x64.h>"), "quoted-source header fallback paths preserve authored filesystem case when resolved source provenance is unavailable")
 
+resolver.AddInclude("parts/nested/level2.bmx", "Import ~q../../imports/helper.bmx~q")
+resolver.AddInterface("../../imports/helper.bmx", "/workspace/imports/.bmx/helper.bmx.release.test.x64.i", "superstrict~nIncludedImportValue$()=~qapplication_main_IncludedImportValue~q '@source ~q/workspace/imports/helper.bmx~q,1,0")
+Local defaultRootIncludedImport:TCompilerResult = TBlitzMaxCompiler.Compile("/workspace/main.bmx", "SuperStrict~nInclude ~qparts/nested/level2.bmx~q~nLocal value:String = IncludedImportValue()", resolver, TestOptions())
+Check(defaultRootIncludedImport.Succeeded() And Not HasCompilerDiagnostic(defaultRootIncludedImport, "BMXC1110"), "quoted imports inside nested Includes resolve against the calculated application source root when no explicit source-unit option is supplied")
+Local includedModuleOptions:TCompilerOptions = TestOptions()
+includedModuleOptions.sourceModuleName = "acme.main"
+includedModuleOptions.sourceUnitPath = "main.bmx"
+Local includedModuleImport:TCompilerResult = TBlitzMaxCompiler.Compile("/workspace/main.bmx", "SuperStrict~nModule acme.main~nInclude ~qparts/nested/level2.bmx~q", resolver, includedModuleOptions)
+Local includedModuleInterfaceDiagnostics:TCompilerDiagnostic[]
+Local includedModuleInterface:String = TBlitzMaxCompiler.EmitInterface(includedModuleImport, includedModuleInterfaceDiagnostics)
+Check(includedModuleImport.Succeeded() And includedModuleInterfaceDiagnostics.length = 0 And Contains(includedModuleInterface, "import ~qimports/helper.bmx~q") And Not Contains(includedModuleInterface, "import ~q../../imports/helper.bmx~q"), "primary module interfaces canonicalize quoted imports from included documents relative to the module root")
+
 resolver.AddInterface("../outside.bmx", "sdk/mod/acme.mod/outside.bmx.release.test.x64.i", nestedDriverInterface)
 Local escapingUnitOptions:TCompilerOptions = TestOptions()
 escapingUnitOptions.sourceModuleName = "acme.multisource"
