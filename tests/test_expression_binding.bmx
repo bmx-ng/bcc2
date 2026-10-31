@@ -23,6 +23,10 @@ Function DiagnosticCount:Int(diagnostics:TDiagnostic[], code:String)
 	Return count
 End Function
 
+Local missingRoutineNameSource:String = "SuperStrict~nType TMalformedRoutine~nMethod First()~nMethod~nMethod Second()~nPrint ~qbody~q~nEnd Method~nEnd Type"
+Local missingRoutineNameAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(missingRoutineNameSource, "missing-routine-name.bmx")
+Check(missingRoutineNameAnalysis.model <> Null And DiagnosticCount(missingRoutineNameAnalysis.syntaxTree.diagnostics, "BMX2000") = 1, "a bare Method receives the expected missing routine name diagnostic without crashing semantic analysis")
+
 Local unresolvedExpressionOptions:TLanguageAnalysisOptions = TLanguageAnalysisOptions.Create()
 unresolvedExpressionOptions.typeResolution = New TTypeResolutionOptions
 unresolvedExpressionOptions.typeResolution.reportUnresolvedTypes = True
