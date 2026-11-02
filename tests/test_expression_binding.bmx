@@ -1796,13 +1796,35 @@ Local abstractCreationParse:TParseResult = TBlitzMaxParser.ParseText(abstractCre
 Local abstractCreationModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(abstractCreationParse.syntaxTree)
 TExpressionBinder.Bind(abstractCreationModel)
 Local abstractCreationDiagnostics:Int
+Local incompleteAbstractMessage:String
+Local explicitAbstractMessage:String
 For Local diagnostic:TDiagnostic = EachIn abstractCreationModel.diagnostics
-	If diagnostic.code = "BMX3316" Then abstractCreationDiagnostics :+ 1
+	If diagnostic.code = "BMX3316" Then
+		abstractCreationDiagnostics :+ 1
+		If diagnostic.message.Contains("TIncompleteFactory") Then incompleteAbstractMessage = diagnostic.message
+		If diagnostic.message.Contains("TExplicitAbstract") Then explicitAbstractMessage = diagnostic.message
+	End If
 Next
 Check(abstractCreationDiagnostics = 3, "abstract types and children with unimplemented abstract methods cannot be instantiated")
+Check(incompleteAbstractMessage.Contains("required member 'TCipherFactory.Find(Int)' is not implemented"), "an incomplete child diagnostic names its inherited abstract obligation")
+Check(explicitAbstractMessage = "Cannot create an instance of abstract type 'TExplicitAbstract'.", "an explicitly abstract marker type retains the general abstract-type diagnostic")
 Check(abstractCreationModel.IsAbstractType(abstractCreationModel.globalScope.LookupLocal("TCipherFactory")[0]), "a type declaring an abstract method is modeled as abstract")
 Check(abstractCreationModel.IsAbstractType(abstractCreationModel.globalScope.LookupLocal("TIncompleteFactory")[0]), "an inherited abstract method keeps a child abstract")
 Check(Not abstractCreationModel.IsAbstractType(abstractCreationModel.globalScope.LookupLocal("TConcreteFactory")[0]), "implementing every abstract method makes a child concrete")
+
+Local multipleAbstractAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nType TRequirements~nMethod First() Abstract~nMethod Second(value:String Var) Abstract~nEnd Type~nType TIncomplete Extends TRequirements~nEnd Type~nLocal value:TIncomplete = New TIncomplete", "multiple-abstract-obligations.bmx")
+Local multipleAbstractMessage:String
+For Local diagnostic:TDiagnostic = EachIn multipleAbstractAnalysis.model.diagnostics
+	If diagnostic.code = "BMX3316" Then multipleAbstractMessage = diagnostic.message
+Next
+Check(multipleAbstractMessage.Contains("2 required members are not implemented") And multipleAbstractMessage.Contains("including 'TRequirements.First()'"), "an incomplete type diagnostic summarizes multiple obligations without listing them all")
+
+Local genericAbstractAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nType TGenericRequirement<T>~nMethod Accept(value:T Var) Abstract~nEnd Type~nType TStringRequirement Extends TGenericRequirement<String>~nEnd Type~nLocal value:TStringRequirement = New TStringRequirement", "generic-abstract-obligation.bmx")
+Local genericAbstractMessage:String
+For Local diagnostic:TDiagnostic = EachIn genericAbstractAnalysis.model.diagnostics
+	If diagnostic.code = "BMX3316" Then genericAbstractMessage = diagnostic.message
+Next
+Check(genericAbstractMessage.Contains("required member 'TGenericRequirement<String>.Accept(String Var)'"), "an incomplete generic child diagnostic shows the substituted abstract signature and parameter mode")
 
 Local inheritedGenericImplementationSource:String = "SuperStrict~nInterface IIterator<T>~nEnd Interface~nInterface IIterable<T>~nMethod GetIterator:IIterator<T>()~nEnd Interface~nInterface ICollection<T> Extends IIterable<T>~nMethod CopyTo(array:T[], index:Int = 0)~nEnd Interface~nType TGenericCollection<T> Implements ICollection<T>~nMethod GetIterator:IIterator<T>()~nReturn Null~nEnd Method~nMethod CopyTo(array:T[], index:Int = 0)~nEnd Method~nEnd Type~nType TStringCollection<T> Extends TGenericCollection<T>~nEnd Type~nLocal values:TStringCollection<String> = New TStringCollection<String>"
 Local inheritedGenericImplementationParse:TParseResult = TBlitzMaxParser.ParseText(inheritedGenericImplementationSource, "inherited-generic-implementation.bmx")
