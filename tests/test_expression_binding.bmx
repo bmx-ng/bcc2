@@ -520,6 +520,20 @@ Check(operatorModel.ResolvedCall(negativeExpression).routine.name = "-" And oper
 Local compoundStatement:TAssignmentStatementSyntax = TAssignmentStatementSyntax(operatorParse.syntaxTree.root.members[10])
 Check(operatorModel.ResolvedCall(compoundStatement).routine.name = ":+", "compound assignment operator binding")
 
+Local validBuiltinCompoundSource:String = "SuperStrict~nEnum ECompoundFlags~nNone=0~nFirst=1~nSecond=2~nEnd Enum~nLocal byteValue:Byte~nLocal intValue:Int=2~nLocal floatValue:Float=3.5~nLocal text:String=~qvalue~q~nLocal pointer:Byte Ptr~nLocal values:Int[]=[1]~nLocal flags:ECompoundFlags~nbyteValue :+ intValue~nintValue :* byteValue~nintValue :/ 2~nintValue :Mod 2~nintValue :& 3~nintValue :| 4~nintValue :~~ 1~nintValue :Shl 1~nintValue :Shr 1~nintValue :Sar 1~nfloatValue :+ intValue~nfloatValue :Mod 2~ntext :+ intValue~npointer :+ intValue~npointer :- intValue~nvalues :+ [2]~nflags :| ECompoundFlags.First"
+Local validBuiltinCompound:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(validBuiltinCompoundSource, "valid-builtin-compound-assignments.bmx")
+Check(validBuiltinCompound.model.diagnostics.length = 0, "built-in compound assignments accept numeric balancing, floating Mod, String conversion, pointer movement, Array concatenation and Enum flags")
+
+Local invalidBuiltinCompoundSource:String = "SuperStrict~nLocal text:String=~qtest~q~nLocal value:Int~nLocal fraction:Float~nLocal pointer:Byte Ptr~nLocal values:Int[]~nvalue :+ text~nvalue :- text~nvalue :* text~nvalue :/ text~nvalue :Mod text~nvalue :& text~nvalue :| text~nvalue :~~ text~nvalue :Shl text~nvalue :Shr text~nvalue :Sar text~nfraction :& value~ntext :- text~npointer :+ text~nvalues :+ text"
+Local invalidBuiltinCompound:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(invalidBuiltinCompoundSource, "invalid-builtin-compound-assignments.bmx")
+Check(DiagnosticCount(invalidBuiltinCompound.model.diagnostics, "BMX3310") = 1, "a compound operation whose result cannot be stored in its target receives one conversion diagnostic")
+Check(DiagnosticCount(invalidBuiltinCompound.model.diagnostics, "BMX3305") = 14, "invalid String, numeric, floating-bitwise, pointer and Array compound operations are rejected by the language binder")
+Local invalidStringNumericCompound:TDiagnostic
+For Local diagnostic:TDiagnostic = EachIn invalidBuiltinCompound.model.diagnostics
+	If diagnostic.code = "BMX3310" Then invalidStringNumericCompound = diagnostic; Exit
+Next
+Check(invalidStringNumericCompound And invalidStringNumericCompound.message.Contains("String") And invalidStringNumericCompound.message.Contains("Int") And invalidStringNumericCompound.message.Contains("compound assignment ':+'"), "Int :+ String identifies the compound result conversion before C generation")
+
 Local assignmentOperatorSource:String = "SuperStrict~nType TMutableValue~nMethod Operator :=:TMutableValue(value:String)~nReturn Self~nEnd Method~nEnd Type~nLocal current:TMutableValue=New TMutableValue~ncurrent=~qchanged~q~ncurrent=New TMutableValue"
 Local assignmentOperatorParse:TParseResult = TBlitzMaxParser.ParseText(assignmentOperatorSource, "assignment-operator-binding.bmx")
 Local assignmentOperatorModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(assignmentOperatorParse.syntaxTree)
