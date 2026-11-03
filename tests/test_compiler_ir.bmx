@@ -354,7 +354,23 @@ noRuntimeOptions.embeddedMulticore = False
 Local nestedMulticoreDiagnostics:TCompilerDiagnostic[]
 Local nestedMulticoreC:String = TBlitzMaxCompiler.EmitC(nestedMulticore, nestedMulticoreDiagnostics)
 Local nestedMulticoreFunction:String = CFunctionSection(nestedMulticoreC, "bmx_fn0_Nested(")
-Check(nestedMulticore.Succeeded() And nestedMulticoreDiagnostics.length = 0 And Occurrences(nestedMulticoreFunction, "bmx_embedded_gc_poll();") = 1, "opt-in polls stay outside EachIn scopes with unrooted collection temporaries")
+Check(nestedMulticore.Succeeded() And nestedMulticoreDiagnostics.length = 0 And Occurrences(nestedMulticoreFunction, "BMX_EMBEDDED_ROOT_STRING") = 2 And Occurrences(nestedMulticoreFunction, "bmx_embedded_gc_poll();") = 3, "opt-in String EachIn roots its collection so the iteration and nested loops may poll")
+Local arrayMulticoreSource:String = "SuperStrict~nFunction Scan:Int(values:Int[])~nLocal total:Int~nFor Local item:Int=EachIn values~nWhile total < 2~ntotal:+1~nWend~nNext~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=Scan(New Int[2])"
+noRuntimeOptions.embeddedMulticore = True
+Local arrayMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-array.bmx", arrayMulticoreSource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local arrayMulticoreDiagnostics:TCompilerDiagnostic[]
+Local arrayMulticoreC:String = TBlitzMaxCompiler.EmitC(arrayMulticore, arrayMulticoreDiagnostics)
+Local arrayMulticoreFunction:String = CFunctionSection(arrayMulticoreC, "bmx_fn0_Scan(")
+Check(arrayMulticore.Succeeded() And arrayMulticoreDiagnostics.length = 0 And Occurrences(arrayMulticoreFunction, "BMX_EMBEDDED_ROOT_ARRAY") = 2 And Occurrences(arrayMulticoreFunction, "bmx_embedded_gc_poll();") = 3, "opt-in scalar Array EachIn roots its collection so the iteration and nested loops may poll")
+Local objectArrayMulticoreSource:String = "SuperStrict~nFunction ScanObjects:Int(values:Object[])~nLocal total:Int~nFor Local item:Object=EachIn values~nWhile total < 2~ntotal:+1~nWend~nNext~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=ScanObjects(New Object[2])"
+noRuntimeOptions.embeddedMulticore = True
+Local objectArrayMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-object-array.bmx", objectArrayMulticoreSource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local objectArrayMulticoreDiagnostics:TCompilerDiagnostic[]
+Local objectArrayMulticoreC:String = TBlitzMaxCompiler.EmitC(objectArrayMulticore, objectArrayMulticoreDiagnostics)
+Local objectArrayMulticoreFunction:String = CFunctionSection(objectArrayMulticoreC, "bmx_fn0_ScanObjects(")
+Check(objectArrayMulticore.Succeeded() And objectArrayMulticoreDiagnostics.length = 0 And Occurrences(objectArrayMulticoreFunction, "bmx_embedded_gc_poll();") = 1, "opt-in Object Array EachIn continues to suppress nested polls while its element is unrooted")
 Local selectedMulticoreSource:String = "SuperStrict~nFunction Selected:Int(value:String)~nLocal total:Int~nSelect value~nCase ~qA~q~nWhile total < 2~ntotal:+1~nWend~nEnd Select~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=Selected(~qA~q)"
 noRuntimeOptions.embeddedMulticore = True
 Local selectedMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-select.bmx", selectedMulticoreSource, noRuntimeResolver, noRuntimeOptions)
@@ -362,7 +378,7 @@ noRuntimeOptions.embeddedMulticore = False
 Local selectedMulticoreDiagnostics:TCompilerDiagnostic[]
 Local selectedMulticoreC:String = TBlitzMaxCompiler.EmitC(selectedMulticore, selectedMulticoreDiagnostics)
 Local selectedMulticoreFunction:String = CFunctionSection(selectedMulticoreC, "bmx_fn0_Selected(")
-Check(selectedMulticore.Succeeded() And selectedMulticoreDiagnostics.length = 0 And Occurrences(selectedMulticoreFunction, "bmx_embedded_gc_poll();") = 1, "opt-in polls stay outside Select scopes with unrooted selector temporaries")
+Check(selectedMulticore.Succeeded() And selectedMulticoreDiagnostics.length = 0 And Occurrences(selectedMulticoreFunction, "BMX_EMBEDDED_ROOT_STRING") = 2 And Occurrences(selectedMulticoreFunction, "bmx_embedded_gc_poll();") = 2, "opt-in Select roots its selector so nested loops may poll")
 Local noRuntimeDebugOptions:TCompilerOptions = TestOptions()
 noRuntimeDebugOptions.targetPlatform = "pico"
 noRuntimeDebugOptions.targetArchitecture = "arm"
