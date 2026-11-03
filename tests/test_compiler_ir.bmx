@@ -387,6 +387,23 @@ Local iteratorMulticoreDiagnostics:TCompilerDiagnostic[]
 Local iteratorMulticoreC:String = TBlitzMaxCompiler.EmitC(iteratorMulticore, iteratorMulticoreDiagnostics)
 Local iteratorMulticoreFunction:String = CFunctionSection(iteratorMulticoreC, "bmx_fn0_Count(")
 Check(iteratorMulticore.Succeeded() And iteratorMulticoreDiagnostics.length = 0 And Occurrences(iteratorMulticoreFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 6 And Contains(iteratorMulticoreFunction, "BMX_EMBEDDED_ROOT_EXCEPTION") And Occurrences(iteratorMulticoreFunction, "bmx_embedded_gc_poll();") = 2, "opt-in object iterator roots collection, iterator, cleanup handle, element and loop variable before polling")
+Local staticRootSource:String = "SuperStrict~nType TStaticRootItem~nEnd Type~nGlobal StaticArray shared:TStaticRootItem[2]~nFunction Keep:Int()~nLocal StaticArray values:TStaticRootItem[2]~nvalues[0]=New TStaticRootItem~nshared[1]=values[0]~nReturn 1~nEnd Function~nLocal result:Int=Keep()"
+Local staticRoots:TCompilerResult = TBlitzMaxCompiler.Compile("pico-static-object-roots.bmx", staticRootSource, noRuntimeResolver, noRuntimeOptions)
+Local staticRootDiagnostics:TCompilerDiagnostic[]
+Local staticRootC:String = TBlitzMaxCompiler.EmitC(staticRoots, staticRootDiagnostics)
+Local staticKeep:String = CFunctionSection(staticRootC, "bmx_fn0_Keep(")
+Local staticMain:String = CFunctionSection(staticRootC, "main(")
+Check(staticRoots.Succeeded() And staticRootDiagnostics.length = 0 And Occurrences(staticKeep, "BMX_EMBEDDED_ROOT_OBJECT") = 2 And Occurrences(staticMain, "BMX_EMBEDDED_ROOT_OBJECT") = 2, "embedded local and global fixed Object arrays publish each element as a precise root")
+Local staticLoopSource:String = "SuperStrict~nType TStaticLoopHolder~nField StaticArray values:Int[2]~nEnd Type~nGlobal StaticArray shared:Int[2]~nFunction ScanLocal:Int()~nLocal StaticArray values:Int[2]~nLocal total:Int~nFor Local item:Int=EachIn values~nWhile total<2~ntotal:+1~nWend~nNext~nReturn total~nEnd Function~nFunction ScanGlobal:Int()~nLocal total:Int~nFor Local item:Int=EachIn shared~nWhile total<2~ntotal:+1~nWend~nNext~nReturn total~nEnd Function~nFunction ScanField:Int(holder:TStaticLoopHolder)~nLocal total:Int~nFor Local item:Int=EachIn holder.values~nWhile total<2~ntotal:+1~nWend~nNext~nWhile total<3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=ScanLocal()+ScanGlobal()+ScanField(New TStaticLoopHolder)"
+noRuntimeOptions.embeddedMulticore = True
+Local staticLoops:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-static-loops.bmx", staticLoopSource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local staticLoopDiagnostics:TCompilerDiagnostic[]
+Local staticLoopC:String = TBlitzMaxCompiler.EmitC(staticLoops, staticLoopDiagnostics)
+Local staticLocalFunction:String = CFunctionSection(staticLoopC, "bmx_fn0_ScanLocal(")
+Local staticGlobalFunction:String = CFunctionSection(staticLoopC, "bmx_fn1_ScanGlobal(")
+Local staticFieldFunction:String = CFunctionSection(staticLoopC, "bmx_fn2_ScanField(")
+Check(staticLoops.Succeeded() And staticLoopDiagnostics.length = 0 And Occurrences(staticLocalFunction, "bmx_embedded_gc_poll();") = 2 And Occurrences(staticGlobalFunction, "bmx_embedded_gc_poll();") = 2 And Occurrences(staticFieldFunction, "bmx_embedded_gc_poll();") = 1, "opt-in scalar fixed-array loops poll for proven local and global storage, but defer field-backed pointer liveness")
 Local selectedMulticoreSource:String = "SuperStrict~nFunction Selected:Int(value:String)~nLocal total:Int~nSelect value~nCase ~qA~q~nWhile total < 2~ntotal:+1~nWend~nEnd Select~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=Selected(~qA~q)"
 noRuntimeOptions.embeddedMulticore = True
 Local selectedMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-select.bmx", selectedMulticoreSource, noRuntimeResolver, noRuntimeOptions)
