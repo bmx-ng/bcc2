@@ -2277,6 +2277,12 @@ Check(Contains(stringRuntimeC, "struct BCC2_BBString_5") And Contains(stringRunt
 Check(Contains(stringRuntimeC, "_Empty = &bbEmptyString;"), "uninitialized String storage receives the BlitzMax empty-string default")
 Check(Not Contains(stringRuntimeC, "extern BBSTRING bbAppDir;") And Not Contains(stringRuntimeC, "extern void bbWriteStdout(BBSTRING bmx_ep0_str);") And Contains(stringRuntimeC, "bbAppDir") And Contains(stringRuntimeC, "bbWriteStdout(bmx_global_"), "runtime C uses dependency-header managed String declarations and calls")
 Check(stringRuntimeC.Find("bb_init_strings();") < stringRuntimeC.Find(" = (BBString*)&bmx_string_str0;"), "String hashes initialize before String-backed global initializers")
+Local spaceEscapePrefix:String = Chr(126)
+Local spaceEscapeResult:TCompilerResult = TBlitzMaxCompiler.Compile("space-escape-runtime.bmx", "SuperStrict~nGlobal Spaced:String = ~qa" + spaceEscapePrefix + "sb" + spaceEscapePrefix + "Sc~q", resolver, TestOptions())
+Local spaceEscapeDiagnostics:TCompilerDiagnostic[]
+Local spaceEscapeC:String = TBlitzMaxCompiler.EmitRuntimeC(spaceEscapeResult, spaceEscapeDiagnostics)
+Check(spaceEscapeResult.Succeeded() And spaceEscapeDiagnostics.length = 0 And spaceEscapeResult.ir.stringLiterals.length = 1 And spaceEscapeResult.ir.stringLiterals[0].value = "a b c", "ASCII-space escapes survive parsing, constant evaluation and IR lowering")
+Check(Contains(spaceEscapeC, "{97,32,98,32,99}"), "runtime C emits ASCII 32 for lowercase and uppercase space escapes")
 Local standaloneStringDiagnostics:TCompilerDiagnostic[]
 TBlitzMaxCompiler.EmitC(stringValues, standaloneStringDiagnostics)
 Check(HasDiagnostic(standaloneStringDiagnostics, "BMXC2025"), "standalone scalar C mode explicitly rejects managed String runtime values")

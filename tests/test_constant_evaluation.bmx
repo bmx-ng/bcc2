@@ -65,6 +65,14 @@ Check(documentedEscapeValue[0] = 0 And documentedEscapeValue[1] = 9 And document
 Check(documentedEscapeValue[4] = 34 And documentedEscapeValue[5] = 126, "quote and tilde String escapes decode")
 Check(documentedEscapeValue[6] = 65 And documentedEscapeValue[7] = 65 And documentedEscapeValue[8] = 65, "decimal, hexadecimal and binary String escapes decode")
 
+Local spaceEscapeLiteral:String = Chr(34) + "left" + escapePrefix + "smiddle" + escapePrefix + "Sright " + escapePrefix + escapePrefix + "s" + Chr(34)
+Local spaceEscapeParse:TParseResult = TBlitzMaxParser.ParseText("SuperStrict~nConst Spaced:String = " + spaceEscapeLiteral, "space-escapes.bmx")
+Local spaceEscapeModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(spaceEscapeParse.syntaxTree)
+TExpressionBinder.Bind(spaceEscapeModel)
+TConstantEvaluator.Evaluate(spaceEscapeModel)
+Check(spaceEscapeModel.diagnostics.length = 0, "ASCII-space String escapes bind and evaluate without diagnostics")
+Check(spaceEscapeModel.SymbolConstantValue(ValueSymbol(spaceEscapeModel, "Spaced")).stringValue = "left middle right ~~s", "lowercase and uppercase space escapes decode to ASCII 32 while escaped tilde remains literal")
+
 Local ordinal:TSymbol = model.globalScope.LookupLocal("EOrdinal")[0]
 Local flags:TSymbol = model.globalScope.LookupLocal("EFlags")[0]
 Check(model.SymbolConstantValue(ordinal.memberScope.LookupLocal("Zero")[0]).integerValue = 0, "ordinary enum starts at zero")
@@ -95,6 +103,14 @@ TExpressionBinder.Bind(multilineModel)
 TConstantEvaluator.Evaluate(multilineModel)
 Check(multilineModel.diagnostics.length = 0, "valid production-shaped multiline string diagnostics")
 Check(multilineModel.SymbolConstantValue(ValueSymbol(multilineModel, "Text")).stringValue = "alpha~n~tbetagamma", "multiline strings strip the closing-delimiter margin, trim line ends and honor soft wrapping")
+
+Local multilineSpaceSource:String = "SuperStrict~nConst Text:String = " + tripleQuote + "~r~n~t~talpha  " + escapePrefix + "s   ~r~n~t~tbeta" + escapePrefix + "S~r~n~t~tgamma" + escapePrefix + "s\~r~n~t~tdelta   ~r~n~t~tepsilon~t" + escapePrefix + "s~r~n~t~t" + tripleQuote
+Local multilineSpaceParse:TParseResult = TBlitzMaxParser.ParseText(multilineSpaceSource, "multiline-space-constant.bmx")
+Local multilineSpaceModel:TSemanticModel = TBlitzMaxSemanticAnalyzer.Analyze(multilineSpaceParse.syntaxTree)
+TExpressionBinder.Bind(multilineSpaceModel)
+TConstantEvaluator.Evaluate(multilineSpaceModel)
+Check(multilineSpaceModel.diagnostics.length = 0, "multiline ASCII-space escapes accept CRLF input without diagnostics")
+Check(multilineSpaceModel.SymbolConstantValue(ValueSymbol(multilineSpaceModel, "Text")).stringValue = "alpha   ~nbeta ~ngamma delta~nepsilon~t ", "a terminal space escape preserves preceding whitespace, trims following whitespace, and composes with soft wrapping")
 
 Local invalidSource:String = "SuperStrict~nConst A:Int = B~nConst B:Int = A~nConst TooBig:Byte = 256~nConst TooBigShort:Short = 65536~nFunction RuntimeValue:Int()~nReturn 1~nEnd Function~nConst Bad:Int = RuntimeValue()~nEnum ESmall:Byte~nLarge = 300~nEnd Enum~nConst Zero:Int = 1 / 0"
 Local invalidParsed:TParseResult = TBlitzMaxParser.ParseText(invalidSource, "invalid-constants.bmx")
