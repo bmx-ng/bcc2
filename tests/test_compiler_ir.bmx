@@ -371,6 +371,22 @@ Local objectArrayMulticoreDiagnostics:TCompilerDiagnostic[]
 Local objectArrayMulticoreC:String = TBlitzMaxCompiler.EmitC(objectArrayMulticore, objectArrayMulticoreDiagnostics)
 Local objectArrayMulticoreFunction:String = CFunctionSection(objectArrayMulticoreC, "bmx_fn0_ScanObjects(")
 Check(objectArrayMulticore.Succeeded() And objectArrayMulticoreDiagnostics.length = 0 And Occurrences(objectArrayMulticoreFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 2 And Occurrences(objectArrayMulticoreFunction, "bmx_embedded_gc_poll();") = 3, "opt-in Object Array EachIn roots the element and loop variable so nested loops may poll")
+Local iteratorMulticoreResolver:TCompilerTestResolver = New TCompilerTestResolver
+iteratorMulticoreResolver.core = noRuntimeResolver.core
+iteratorMulticoreResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", "superstrict~nICloseable^Object{~n-Close()A=~qbrl_blitz_ICloseable_Close~q~n}AI=~qbrl_blitz_ICloseable~q")
+Local iteratorMulticoreSource:String = "SuperStrict~nImport brl.blitz~nType TLoopIterator~nField index:Int~nMethod HasNext:Int()~nindex:+1~nReturn index<=2~nEnd Method~nMethod NextObject:Object()~nReturn Self~nEnd Method~nEnd Type~nType TLoopValues~nMethod ObjectEnumerator:TLoopIterator()~nReturn New TLoopIterator~nEnd Method~nEnd Type~nFunction Count:Int(values:TLoopValues)~nLocal total:Int~nFor Local item:TLoopIterator=EachIn values~nWhile total<2~ntotal:+1~nWend~nIf item Then total:+1~nNext~nReturn total~nEnd Function~nLocal result:Int=Count(New TLoopValues)"
+Local iteratorSingleCore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-singlecore-object-iterator.bmx", iteratorMulticoreSource, iteratorMulticoreResolver, noRuntimeOptions)
+Local iteratorSingleCoreDiagnostics:TCompilerDiagnostic[]
+Local iteratorSingleCoreC:String = TBlitzMaxCompiler.EmitC(iteratorSingleCore, iteratorSingleCoreDiagnostics)
+Local iteratorSingleCoreFunction:String = CFunctionSection(iteratorSingleCoreC, "bmx_fn0_Count(")
+Check(iteratorSingleCore.Succeeded() And iteratorSingleCoreDiagnostics.length = 0 And Occurrences(iteratorSingleCoreFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 2 And Not Contains(iteratorSingleCoreFunction, "bmx_embedded_gc_poll();"), "object iterator cleanup handle is rooted even in single-core builds that can collect during method calls")
+noRuntimeOptions.embeddedMulticore = True
+Local iteratorMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-object-iterator.bmx", iteratorMulticoreSource, iteratorMulticoreResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local iteratorMulticoreDiagnostics:TCompilerDiagnostic[]
+Local iteratorMulticoreC:String = TBlitzMaxCompiler.EmitC(iteratorMulticore, iteratorMulticoreDiagnostics)
+Local iteratorMulticoreFunction:String = CFunctionSection(iteratorMulticoreC, "bmx_fn0_Count(")
+Check(iteratorMulticore.Succeeded() And iteratorMulticoreDiagnostics.length = 0 And Occurrences(iteratorMulticoreFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 6 And Contains(iteratorMulticoreFunction, "BMX_EMBEDDED_ROOT_EXCEPTION") And Occurrences(iteratorMulticoreFunction, "bmx_embedded_gc_poll();") = 2, "opt-in object iterator roots collection, iterator, cleanup handle, element and loop variable before polling")
 Local selectedMulticoreSource:String = "SuperStrict~nFunction Selected:Int(value:String)~nLocal total:Int~nSelect value~nCase ~qA~q~nWhile total < 2~ntotal:+1~nWend~nEnd Select~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=Selected(~qA~q)"
 noRuntimeOptions.embeddedMulticore = True
 Local selectedMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-select.bmx", selectedMulticoreSource, noRuntimeResolver, noRuntimeOptions)
