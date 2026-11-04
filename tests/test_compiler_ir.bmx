@@ -371,6 +371,19 @@ Local objectArrayMulticoreDiagnostics:TCompilerDiagnostic[]
 Local objectArrayMulticoreC:String = TBlitzMaxCompiler.EmitC(objectArrayMulticore, objectArrayMulticoreDiagnostics)
 Local objectArrayMulticoreFunction:String = CFunctionSection(objectArrayMulticoreC, "bmx_fn0_ScanObjects(")
 Check(objectArrayMulticore.Succeeded() And objectArrayMulticoreDiagnostics.length = 0 And Occurrences(objectArrayMulticoreFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 2 And Occurrences(objectArrayMulticoreFunction, "bmx_embedded_gc_poll();") = 3, "opt-in Object Array EachIn roots the element and loop variable so nested loops may poll")
+Local existingArrayTargetSource:String = "SuperStrict~nType TExistingArrayItem~nField value:Int~nEnd Type~nFunction ScanExisting:Int(values:TExistingArrayItem[])~nLocal item:TExistingArrayItem~nLocal total:Int~nFor item=EachIn values~nWhile total<2~ntotal:+1~nWend~nNext~nIf item Then total:+item.value~nReturn total~nEnd Function~nLocal result:Int=ScanExisting(New TExistingArrayItem[2])"
+Local existingArraySingleCore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-singlecore-existing-array-target.bmx", existingArrayTargetSource, noRuntimeResolver, noRuntimeOptions)
+Local existingArraySingleCoreDiagnostics:TCompilerDiagnostic[]
+Local existingArraySingleCoreC:String = TBlitzMaxCompiler.EmitC(existingArraySingleCore, existingArraySingleCoreDiagnostics)
+Local existingArraySingleCoreFunction:String = CFunctionSection(existingArraySingleCoreC, "bmx_fn0_ScanExisting(")
+Check(existingArraySingleCore.Succeeded() And existingArraySingleCoreDiagnostics.length = 0 And Not Contains(existingArraySingleCoreFunction, "bmx_embedded_gc_poll();"), "default single-core Array EachIn with an existing Object local emits no polls")
+noRuntimeOptions.embeddedMulticore = True
+Local existingArrayTarget:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-existing-array-target.bmx", existingArrayTargetSource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local existingArrayTargetDiagnostics:TCompilerDiagnostic[]
+Local existingArrayTargetC:String = TBlitzMaxCompiler.EmitC(existingArrayTarget, existingArrayTargetDiagnostics)
+Local existingArrayTargetFunction:String = CFunctionSection(existingArrayTargetC, "bmx_fn0_ScanExisting(")
+Check(existingArrayTarget.Succeeded() And existingArrayTargetDiagnostics.length = 0 And Occurrences(existingArrayTargetFunction, "BMX_EMBEDDED_ROOT_ARRAY") = 2 And Occurrences(existingArrayTargetFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 2 And Occurrences(existingArrayTargetFunction, "bmx_embedded_gc_poll();") = 2, "opt-in Array EachIn polls with an existing rooted Object local")
 Local iteratorMulticoreResolver:TCompilerTestResolver = New TCompilerTestResolver
 iteratorMulticoreResolver.core = noRuntimeResolver.core
 iteratorMulticoreResolver.AddInterface("brl.blitz", "sdk/brl.blitz.i", "superstrict~nICloseable^Object{~n-Close()A=~qbrl_blitz_ICloseable_Close~q~n}AI=~qbrl_blitz_ICloseable~q")
@@ -417,6 +430,16 @@ Local managedStaticLoopDiagnostics:TCompilerDiagnostic[]
 Local managedStaticLoopC:String = TBlitzMaxCompiler.EmitC(managedStaticLoop, managedStaticLoopDiagnostics)
 Local managedStaticLoopFunction:String = CFunctionSection(managedStaticLoopC, "bmx_fn0_ScanHeld(")
 Check(managedStaticLoop.Succeeded() And managedStaticLoopDiagnostics.length = 0 And Occurrences(managedStaticLoopFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 4 And Occurrences(managedStaticLoopFunction, "bmx_embedded_gc_poll();") = 2 And Contains(managedStaticLoopFunction, "owner_value = bmx_p0_holder;") And Contains(managedStaticLoopC, "BMX_EMBEDDED_VALUE_OBJECT, 0") And Contains(managedStaticLoopC, ".value_field_count = 1"), "opt-in field-backed fixed Object array roots its owner, element and loop variable and emits element tracing metadata")
+Local existingStaticTargetSource:String = "SuperStrict~nType TExistingStaticItem~nField value:Int~nEnd Type~nType TExistingStaticHolder~nField StaticArray items:TExistingStaticItem[2]~nField current:TExistingStaticItem~nEnd Type~nFunction ScanLocal:Int(holder:TExistingStaticHolder)~nLocal item:TExistingStaticItem~nLocal total:Int~nFor item=EachIn holder.items~nholder=Null~nWhile total<2~ntotal:+1~nWend~nNext~nIf item Then total:+item.value~nReturn total~nEnd Function~nFunction ScanField:Int(holder:TExistingStaticHolder)~nLocal total:Int~nFor holder.current=EachIn holder.items~nWhile total<2~ntotal:+1~nWend~nNext~nReturn total~nEnd Function~nLocal result:Int=ScanLocal(New TExistingStaticHolder)+ScanField(New TExistingStaticHolder)"
+noRuntimeOptions.embeddedMulticore = True
+Local existingStaticTarget:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-existing-static-target.bmx", existingStaticTargetSource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local existingStaticTargetDiagnostics:TCompilerDiagnostic[]
+Local existingStaticTargetC:String = TBlitzMaxCompiler.EmitC(existingStaticTarget, existingStaticTargetDiagnostics)
+Local existingStaticLocalFunction:String = CFunctionSection(existingStaticTargetC, "bmx_fn0_ScanLocal(")
+Local existingStaticFieldFunction:String = CFunctionSection(existingStaticTargetC, "bmx_fn1_ScanField(")
+Check(existingStaticTarget.Succeeded() And existingStaticTargetDiagnostics.length = 0 And Occurrences(existingStaticLocalFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 4 And Occurrences(existingStaticLocalFunction, "bmx_embedded_gc_poll();") = 2, "opt-in fixed Array EachIn polls with an existing rooted Object local")
+Check(existingStaticTarget.Succeeded() And existingStaticTargetDiagnostics.length = 0 And Not Contains(existingStaticFieldFunction, "bmx_embedded_gc_poll();"), "field targets in fixed Array EachIn remain conservative")
 Local selectedMulticoreSource:String = "SuperStrict~nFunction Selected:Int(value:String)~nLocal total:Int~nSelect value~nCase ~qA~q~nWhile total < 2~ntotal:+1~nWend~nEnd Select~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=Selected(~qA~q)"
 noRuntimeOptions.embeddedMulticore = True
 Local selectedMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-select.bmx", selectedMulticoreSource, noRuntimeResolver, noRuntimeOptions)
