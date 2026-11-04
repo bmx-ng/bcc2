@@ -520,6 +520,33 @@ Local selectedMulticoreDiagnostics:TCompilerDiagnostic[]
 Local selectedMulticoreC:String = TBlitzMaxCompiler.EmitC(selectedMulticore, selectedMulticoreDiagnostics)
 Local selectedMulticoreFunction:String = CFunctionSection(selectedMulticoreC, "bmx_fn0_Selected(")
 Check(selectedMulticore.Succeeded() And selectedMulticoreDiagnostics.length = 0 And Occurrences(selectedMulticoreFunction, "BMX_EMBEDDED_ROOT_STRING") = 2 And Occurrences(selectedMulticoreFunction, "bmx_embedded_gc_poll();") = 2, "opt-in Select roots its selector so nested loops may poll")
+Local selectedTemporarySource:String = "SuperStrict~nType TSelectChild~nField value:Int~nEnd Type~nType TSelectHolder~nField child:TSelectChild~nEnd Type~nFunction Choose:Int(selector:TSelectHolder, first:TSelectHolder, second:TSelectHolder)~nLocal total:Int~nSelect selector.child.value~nCase first.child.value, second.child.value~nWhile total < 2~ntotal:+1~nWend~nCase 9~nWhile total < 3~ntotal:+1~nWend~nDefault~ntotal = 4~nEnd Select~nReturn total~nEnd Function~nLocal result:Int=Choose(New TSelectHolder, New TSelectHolder, New TSelectHolder)"
+Local selectedTemporarySingleCore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-singlecore-select-temporary.bmx", selectedTemporarySource, noRuntimeResolver, noRuntimeOptions)
+Local selectedTemporarySingleCoreDiagnostics:TCompilerDiagnostic[]
+Local selectedTemporarySingleCoreC:String = TBlitzMaxCompiler.EmitC(selectedTemporarySingleCore, selectedTemporarySingleCoreDiagnostics)
+Local selectedTemporarySingleCoreFunction:String = CFunctionSection(selectedTemporarySingleCoreC, "bmx_fn0_Choose(")
+Check(selectedTemporarySingleCore.Succeeded() And selectedTemporarySingleCoreDiagnostics.length = 0 And Not Contains(selectedTemporarySingleCoreFunction, "bmx_embedded_select_match_") And Not Contains(selectedTemporarySingleCoreFunction, "bmx_embedded_gc_poll();"), "single-core Select keeps the direct case comparison path")
+noRuntimeOptions.embeddedMulticore = True
+Local selectedTemporary:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-select-temporary.bmx", selectedTemporarySource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local selectedTemporaryDiagnostics:TCompilerDiagnostic[]
+Local selectedTemporaryC:String = TBlitzMaxCompiler.EmitC(selectedTemporary, selectedTemporaryDiagnostics)
+Local selectedTemporaryFunction:String = CFunctionSection(selectedTemporaryC, "bmx_fn0_Choose(")
+Local selectClear:String = " = ((struct bmx_cls0_TSelectChild_obj *)&bmx_embedded_null_object);"
+Check(selectedTemporary.Succeeded() And selectedTemporaryDiagnostics.length = 0 And Occurrences(selectedTemporaryFunction, "if (!bmx_embedded_select_match_0)") = 2 And NthOccurrenceAt(selectedTemporaryFunction, "bmx_tmp_t3" + selectClear, 2) > 0 And NthOccurrenceAt(selectedTemporaryFunction, "bmx_tmp_t5" + selectClear, 2) > 0 And NthOccurrenceAt(selectedTemporaryFunction, "bmx_tmp_t6" + selectClear, 2) > 0 And NthOccurrenceAt(selectedTemporaryFunction, "bmx_tmp_t6" + selectClear, 2) < NthOccurrenceAt(selectedTemporaryFunction, "bmx_embedded_gc_poll();", 1), "multicore Select clears selector and short-circuited case temporaries before a case body poll")
+Local objectSelectSource:String = "SuperStrict~nType TObjectChoice~nEnd Type~nFunction Matches:Int(value:TObjectChoice, target:TObjectChoice)~nSelect value~nCase target~nReturn 1~nDefault~nReturn 0~nEnd Select~nEnd Function~nLocal same:TObjectChoice=New TObjectChoice~nLocal result:Int=Matches(same,same)"
+Local objectSelectSingleCore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-singlecore-object-select.bmx", objectSelectSource, noRuntimeResolver, noRuntimeOptions)
+Local objectSelectSingleCoreDiagnostics:TCompilerDiagnostic[]
+Local objectSelectSingleCoreC:String = TBlitzMaxCompiler.EmitC(objectSelectSingleCore, objectSelectSingleCoreDiagnostics)
+Local objectSelectSingleCoreFunction:String = CFunctionSection(objectSelectSingleCoreC, "bmx_fn0_Matches(")
+noRuntimeOptions.embeddedMulticore = True
+Local objectSelectMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-object-select.bmx", objectSelectSource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local objectSelectMulticoreDiagnostics:TCompilerDiagnostic[]
+Local objectSelectMulticoreC:String = TBlitzMaxCompiler.EmitC(objectSelectMulticore, objectSelectMulticoreDiagnostics)
+Local objectSelectMulticoreFunction:String = CFunctionSection(objectSelectMulticoreC, "bmx_fn0_Matches(")
+Check(objectSelectSingleCore.Succeeded() And objectSelectSingleCoreDiagnostics.length = 0 And Contains(objectSelectSingleCoreFunction, "(void *)") And Not Contains(objectSelectSingleCoreFunction, "(BBOBJECT)"), "single-core embedded Object Select uses its own C pointer ABI")
+Check(objectSelectMulticore.Succeeded() And objectSelectMulticoreDiagnostics.length = 0 And Contains(objectSelectMulticoreFunction, "bmx_embedded_select_match_") And Contains(objectSelectMulticoreFunction, "(void *)") And Not Contains(objectSelectMulticoreFunction, "(BBOBJECT)"), "multicore embedded Object Select uses its own C pointer ABI")
 Local noRuntimeDebugOptions:TCompilerOptions = TestOptions()
 noRuntimeDebugOptions.targetPlatform = "pico"
 noRuntimeDebugOptions.targetArchitecture = "arm"
