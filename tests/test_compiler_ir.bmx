@@ -34,6 +34,16 @@ Function Occurrences:Int(text:String, fragment:String)
 	Return count
 End Function
 
+Function NthOccurrenceAt:Int(text:String, fragment:String, ordinal:Int)
+	Local offset:Int
+	For Local index:Int = 1 To ordinal
+		offset = text.Find(fragment, offset)
+		If offset < 0 Then Return -1
+		If index < ordinal Then offset :+ fragment.length
+	Next
+	Return offset
+End Function
+
 Function Compact:String(text:String)
 	Return text.Replace(" ", "").Replace("~t", "").Replace("~r", "").Replace("~n", "")
 End Function
@@ -488,6 +498,20 @@ Local managedTemporaryDiagnostics:TCompilerDiagnostic[]
 Local managedTemporaryC:String = TBlitzMaxCompiler.EmitC(managedTemporary, managedTemporaryDiagnostics)
 Local managedTemporaryFunction:String = CFunctionSection(managedTemporaryC, "bmx_fn0_ReadChild(")
 Check(managedTemporary.Succeeded() And managedTemporaryDiagnostics.length = 0 And Occurrences(managedTemporaryFunction, "BMX_EMBEDDED_ROOT_OBJECT") = 3 And Occurrences(managedTemporaryFunction, "bmx_tmp_t0 = ((struct bmx_cls0_TTemporaryChild_obj *)&bmx_embedded_null_object);") = 2 And Occurrences(managedTemporaryFunction, "bmx_tmp_t1 = ((struct bmx_cls0_TTemporaryChild_obj *)&bmx_embedded_null_object);") = 2, "opt-in managed field-read temporaries are cleared after use")
+Local conditionalTemporarySource:String = "SuperStrict~nType TConditionChild~nField value:Int~nEnd Type~nType TConditionHolder~nField child:TConditionChild~nEnd Type~nFunction Probe:Int(holder:TConditionHolder)~nLocal count:Int~nIf holder.child.value = 1 Then~nWhile count < 2~ncount:+1~nWend~nEnd If~nWhile holder.child.value < 2~ncount:+1~nIf count > 2 Then Exit~nWend~nRepeat~ncount:+1~nUntil holder.child.value = 3~nReturn count~nEnd Function~nLocal result:Int=Probe(New TConditionHolder)"
+Local conditionalTemporarySingleCore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-singlecore-condition-temporary.bmx", conditionalTemporarySource, noRuntimeResolver, noRuntimeOptions)
+Local conditionalTemporarySingleCoreDiagnostics:TCompilerDiagnostic[]
+Local conditionalTemporarySingleCoreC:String = TBlitzMaxCompiler.EmitC(conditionalTemporarySingleCore, conditionalTemporarySingleCoreDiagnostics)
+Local conditionalTemporarySingleCoreFunction:String = CFunctionSection(conditionalTemporarySingleCoreC, "bmx_fn0_Probe(")
+Check(conditionalTemporarySingleCore.Succeeded() And conditionalTemporarySingleCoreDiagnostics.length = 0 And Not Contains(conditionalTemporarySingleCoreFunction, "bmx_native_condition_") And Not Contains(conditionalTemporarySingleCoreFunction, "bmx_embedded_gc_poll();"), "single-core condition emission keeps direct tests without polls")
+noRuntimeOptions.embeddedMulticore = True
+Local conditionalTemporary:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-condition-temporary.bmx", conditionalTemporarySource, noRuntimeResolver, noRuntimeOptions)
+noRuntimeOptions.embeddedMulticore = False
+Local conditionalTemporaryDiagnostics:TCompilerDiagnostic[]
+Local conditionalTemporaryC:String = TBlitzMaxCompiler.EmitC(conditionalTemporary, conditionalTemporaryDiagnostics)
+Local conditionalTemporaryFunction:String = CFunctionSection(conditionalTemporaryC, "bmx_fn0_Probe(")
+Local conditionClear:String = " = ((struct bmx_cls0_TConditionChild_obj *)&bmx_embedded_null_object);"
+Check(conditionalTemporary.Succeeded() And conditionalTemporaryDiagnostics.length = 0 And Occurrences(conditionalTemporaryFunction, "int32_t bmx_native_condition_") = 3 And NthOccurrenceAt(conditionalTemporaryFunction, "bmx_tmp_t0" + conditionClear, 2) > 0 And NthOccurrenceAt(conditionalTemporaryFunction, "bmx_tmp_t0" + conditionClear, 2) < NthOccurrenceAt(conditionalTemporaryFunction, "bmx_embedded_gc_poll();", 1) And NthOccurrenceAt(conditionalTemporaryFunction, "bmx_tmp_t1" + conditionClear, 2) < NthOccurrenceAt(conditionalTemporaryFunction, "bmx_embedded_gc_poll();", 2) And Contains(conditionalTemporaryFunction, "bmx_tmp_t2" + conditionClear + "~n        if (bmx_native_condition_2) break;"), "multicore If, While and Repeat clear condition temporaries before their bodies can poll")
 Local selectedMulticoreSource:String = "SuperStrict~nFunction Selected:Int(value:String)~nLocal total:Int~nSelect value~nCase ~qA~q~nWhile total < 2~ntotal:+1~nWend~nEnd Select~nWhile total < 3~ntotal:+1~nWend~nReturn total~nEnd Function~nLocal result:Int=Selected(~qA~q)"
 noRuntimeOptions.embeddedMulticore = True
 Local selectedMulticore:TCompilerResult = TBlitzMaxCompiler.Compile("pico-multicore-select.bmx", selectedMulticoreSource, noRuntimeResolver, noRuntimeOptions)
