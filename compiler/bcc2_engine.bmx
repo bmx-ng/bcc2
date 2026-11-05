@@ -231,6 +231,8 @@ Type TBcc2Engine
 					options.threaded = True
 				Case "--single-threaded"
 					options.threaded = False
+				Case "--embedded-multicore"
+					options.embeddedMulticore = True
 				Case "--verbose", "-v"
 					options.verbose = True
 				Case "--gdb-debug", "-d"
