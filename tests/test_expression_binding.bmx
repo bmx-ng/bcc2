@@ -83,6 +83,17 @@ Local explicitConversionSource:String = "SuperStrict~nInterface IExplicitTarget<
 Local explicitConversionAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(explicitConversionSource, "explicit-generic-argument-conversions.bmx")
 Check(explicitConversionAnalysis.syntaxTree.diagnostics.length = 0 And explicitConversionAnalysis.model.diagnostics.length = 0, "explicit generic arguments retain ordinary Interface and numeric argument conversions")
 
+Local constrainedObjectCastSource:String = "SuperStrict~nType TPayload~nEnd Type~nFunction CastObject<T>:T(value:Object) Where T Extends Object~nReturn T(value)~nEnd Function~nLocal payload:TPayload=CastObject<TPayload>(New TPayload)"
+Local constrainedObjectCastAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(constrainedObjectCastSource, "constrained-object-cast.bmx")
+Check(constrainedObjectCastAnalysis.Succeeded(), "an Object-constrained routine type parameter permits an explicit Object-to-T downcast")
+Local constrainedBaseCastSource:String = "SuperStrict~nType TCastBase~nEnd Type~nType TCastChild Extends TCastBase~nEnd Type~nFunction CastBase<T>:T(value:TCastBase) Where T Extends TCastChild~nReturn T(value)~nEnd Function~nLocal child:TCastChild=CastBase<TCastChild>(New TCastChild)"
+Local constrainedBaseCastAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(constrainedBaseCastSource, "constrained-base-cast.bmx")
+Check(constrainedBaseCastAnalysis.Succeeded(), "a routine type parameter's derived bound participates in explicit downcast classification")
+Local unconstrainedObjectCastAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nFunction CastObject<T>:T(value:Object)~nReturn T(value)~nEnd Function", "unconstrained-object-cast.bmx")
+Check(HasDiagnostic(unconstrainedObjectCastAnalysis.model.diagnostics, "BMX3312"), "an unconstrained routine type parameter does not permit an Object-to-T cast")
+Local implicitConstrainedObjectConversion:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nFunction ConvertObject<T>:T(value:Object) Where T Extends Object~nReturn value~nEnd Function", "implicit-constrained-object-conversion.bmx")
+Check(HasDiagnostic(implicitConstrainedObjectConversion.model.diagnostics, "BMX3310"), "an Object-constrained routine type parameter still requires an explicit downcast")
+
 Local genericReferenceSource:String = "SuperStrict~nFunction Identity<T>:T(value:T)~nReturn value~nEnd Function~nLocal callback:Int(value:Int)=Identity<Int>~nLocal answer:Int=callback(42)"
 Local genericReferenceAnalysis:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText(genericReferenceSource, "generic-routine-reference.bmx")
 Check(genericReferenceAnalysis.syntaxTree.diagnostics.length = 0 And genericReferenceAnalysis.model.diagnostics.length = 0, "explicit generic routine reference diagnostics")
