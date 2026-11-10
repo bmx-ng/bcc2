@@ -1,5 +1,7 @@
 SuperStrict
 
+Import BRL.Math
+
 Function Clamp<T>:T(value:T, low:T, high:T) Where T Is Numeric
 	If value < low Then Return low
 	If value > high Then Return high
@@ -15,6 +17,54 @@ Struct SClamp<T> Where T Is Numeric
 		If value < low Then Return low
 		If value > high Then Return high
 		Return value
+	End Method
+End Struct
+
+Struct SLength<T> Where T Is Numeric
+	Field x:T
+	Field y:T
+
+	Method New(x:T, y:T)
+		Self.x = x
+		Self.y = y
+	End Method
+
+	Method Length:T()
+		Return T(Sqr(Double(x * x + y * y)))
+	End Method
+End Struct
+
+Struct SReflect<T> Where T Is Numeric
+	Field x:T
+	Field y:T
+
+	Method New(x:T, y:T)
+		Self.x = x
+		Self.y = y
+	End Method
+
+	Method Operator*:SReflect<T>(scale:T)
+		Return New SReflect<T>(x * scale, y * scale)
+	End Method
+
+	Method Operator-:SReflect<T>(other:SReflect<T>)
+		Return New SReflect<T>(x - other.x, y - other.y)
+	End Method
+
+	Method Dot:T(other:SReflect<T>)
+		Return x * other.x + y * other.y
+	End Method
+
+	Method Reflect:SReflect<T>(normal:SReflect<T>)
+		Return normal * Dot(normal) * 2.0 - Self
+	End Method
+
+	Method ReflectCast:SReflect<T>(normal:SReflect<T>)
+		Return normal * Dot(normal) * T(2.0) - Self
+	End Method
+
+	Method ToDouble:Double()
+		Return Double(x)
 	End Method
 End Struct
 
@@ -38,4 +88,17 @@ If IntegralProbe<UInt>(3, 2, 1) <> 2 Or IntegralProbe<Long>(3, 2, 1) <> 2 Or Int
 If IntegralProbe<LongInt>(3, 2, 1) <> 2 Or IntegralProbe<ULongInt>(3, 2, 1) <> 2 Or IntegralProbe<Size_T>(3, 2, 1) <> 2 Then Throw "special integral operators"
 Local calculator:SClamp<Double>
 If calculator.Apply(d, 0, 1) <> d Then Throw "constrained method"
+Local vectorFloat:SReflect<Float> = New SReflect<Float>(1.0, 2.0)
+Local normalFloat:SReflect<Float> = New SReflect<Float>(1.0, 0.0)
+Local reflectedFloat:SReflect<Float> = vectorFloat.Reflect(normalFloat)
+If reflectedFloat.x <> 1.0 Or reflectedFloat.y <> -2.0 Then Throw "numeric vector reflection"
+Local castFloat:SReflect<Float> = vectorFloat.ReflectCast(normalFloat)
+If castFloat.x <> reflectedFloat.x Or castFloat.y <> reflectedFloat.y Or vectorFloat.ToDouble() <> 1.0 Then Throw "numeric vector explicit casts"
+Local vectorInt:SReflect<Int> = New SReflect<Int>(1, 2)
+Local normalInt:SReflect<Int> = New SReflect<Int>(1, 0)
+Local reflectedInt:SReflect<Int> = vectorInt.Reflect(normalInt)
+If reflectedInt.x <> 1 Or reflectedInt.y <> -2 Then Throw "integral vector reflection"
+Local lengthFloat:SLength<Float> = New SLength<Float>(3.0, 4.0)
+Local lengthInt:SLength<Int> = New SLength<Int>(3, 4)
+If lengthFloat.Length() <> 5.0 Or lengthInt.Length() <> 5 Then Throw "numeric vector length casts"
 Print "numeric-generic-constraint-runtime-ok"
