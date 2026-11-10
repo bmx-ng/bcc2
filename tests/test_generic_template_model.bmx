@@ -887,6 +887,81 @@ Local closureDecoded:TGenericTemplateArtifactDecodeResult = TGenericTemplateArti
 Check(closureRevisionDiagnostics.length = 0 And closureEncodeDiagnostics.length = 0 And closureDecoded.Succeeded() And closureDecoded.artifact.body.kind = TEMPLATE_NODE_FUNCTION_LITERAL And closureDecoded.artifact.body.semanticType.callableParameterNames[0] = "value" And closureDecoded.artifact.body.children.length = 3 And closureDecoded.artifact.body.children[1].children[0].identity = "closure-capture-parameter" And closureDecoded.artifact.body.children[1].children[1].identity = "closure-capture-self", "format-27 round-trip retains structural Closure types, source parameter names, lexical and Self capture records, and managed literal bodies")
 Local closureHistoricalDiagnostics:String[]
 Check(Not EncodeHistorical(closureArtifact, 26, closureHistoricalDiagnostics).length And closureHistoricalDiagnostics[0].StartsWith("BMXGT142"), "format-26 publication cannot silently discard Closure types or literal bodies")
+Local closureFormat34Diagnostics:String[]
+Check(TGenericTemplateArtifactCodec.Decode(EncodeHistorical(closureArtifact, 34, closureFormat34Diagnostics)).Succeeded() And closureFormat34Diagnostics.length = 0, "format-34 lexical Closure captures remain readable")
+Local boundReceiverCapture:TGenericTemplateNode = New TGenericTemplateNode
+boundReceiverCapture.kind = TEMPLATE_NODE_DECLARATION
+boundReceiverCapture.identity = "closure-capture-bound-receiver"
+boundReceiverCapture.valueText = "bmx_bound_receiver_42"
+boundReceiverCapture.semanticType = intType
+Local boundReceiverInitializer:TGenericTemplateNode = New TGenericTemplateNode
+boundReceiverInitializer.kind = TEMPLATE_NODE_LITERAL
+boundReceiverInitializer.valueText = "42"
+boundReceiverInitializer.semanticType = intType
+boundReceiverCapture.children = [boundReceiverInitializer]
+closureCaptures.children = [boundReceiverCapture]
+Local boundRevisionDiagnostics:String[]
+closureArtifact.contentRevision = TGenericTemplateArtifactCodec.ComputeContentRevision(closureArtifact, boundRevisionDiagnostics)
+Local boundEncodeDiagnostics:String[]
+Local boundEncoded:String = TGenericTemplateArtifactCodec.Encode(closureArtifact, boundEncodeDiagnostics)
+Local boundDecoded:TGenericTemplateArtifactDecodeResult = TGenericTemplateArtifactCodec.Decode(boundEncoded, closureArtifact.contentRevision)
+Check(boundRevisionDiagnostics.length = 0 And boundEncodeDiagnostics.length = 0 And boundDecoded.Succeeded() And boundDecoded.artifact.body.children[1].children[0].children[0].valueText = "42", "format-35 round-trip retains the evaluated bound Method receiver initializer")
+Local boundFormat34Diagnostics:String[]
+Check(Not EncodeHistorical(closureArtifact, 34, boundFormat34Diagnostics).length And boundFormat34Diagnostics[0].StartsWith("BMXGT147"), "format-34 cannot publish a computed Method receiver capture")
+
+Local parentInterfaceType:TTemplateTypeReference = New TTemplateTypeReference
+parentInterfaceType.kind = TEMPLATE_TYPE_NAMED
+parentInterfaceType.moduleName = "Example.Runtime"
+parentInterfaceType.symbolName = "IBase"
+parentInterfaceType.runtimeKind = TEMPLATE_RUNTIME_INTERFACE
+parentInterfaceType.runtimeAbiName = "example_runtime_IBase"
+Local childInterfaceType:TTemplateTypeReference = New TTemplateTypeReference
+childInterfaceType.kind = TEMPLATE_TYPE_NAMED
+childInterfaceType.moduleName = "Example.Runtime"
+childInterfaceType.symbolName = "IChild"
+childInterfaceType.runtimeKind = TEMPLATE_RUNTIME_INTERFACE
+childInterfaceType.runtimeAbiName = "example_runtime_IChild"
+Local parentSlot:TGenericTemplateMember = New TGenericTemplateMember
+parentSlot.kind = TEMPLATE_MEMBER_METHOD
+parentSlot.identity = "runtime-slot:0"
+parentSlot.name = "Bump"
+parentSlot.semanticType = intType
+Local parentSlotParameter:TGenericTemplateValueParameter = New TGenericTemplateValueParameter
+parentSlotParameter.name = "value"
+parentSlotParameter.semanticType = intType
+parentSlotParameter.passingMode = PARAMETER_PASS_VAR
+parentSlot.parameters = [parentSlotParameter]
+Local parentInterfaceReference:TGenericTemplateInheritanceReference = New TGenericTemplateInheritanceReference
+parentInterfaceReference.semanticType = parentInterfaceType
+parentInterfaceReference.runtimeInterfaceLayoutPublished = True
+parentInterfaceReference.runtimeInterfaceSlots = [parentSlot]
+Local childSlot:TGenericTemplateMember = New TGenericTemplateMember
+childSlot.kind = TEMPLATE_MEMBER_METHOD
+childSlot.identity = "runtime-slot:1"
+childSlot.name = "Read"
+childSlot.semanticType = intType
+Local childInterfaceReference:TGenericTemplateInheritanceReference = New TGenericTemplateInheritanceReference
+childInterfaceReference.semanticType = childInterfaceType
+childInterfaceReference.runtimeInterfaceLayoutPublished = True
+childInterfaceReference.runtimeInterfaceSlots = [parentSlot, childSlot]
+childInterfaceReference.runtimeInterfaceParents = [parentInterfaceReference]
+Local layoutArtifact:TGenericTemplateArtifact = New TGenericTemplateArtifact
+layoutArtifact.identity = persistedIdentity
+layoutArtifact.parameters = [persistedParameter]
+layoutArtifact.interfaces = [childInterfaceReference]
+Local layoutRevisionDiagnostics:String[]
+layoutArtifact.contentRevision = TGenericTemplateArtifactCodec.ComputeContentRevision(layoutArtifact, layoutRevisionDiagnostics)
+Local layoutEncodeDiagnostics:String[]
+Local layoutEncoded:String = TGenericTemplateArtifactCodec.Encode(layoutArtifact, layoutEncodeDiagnostics)
+Local layoutDecoded:TGenericTemplateArtifactDecodeResult = TGenericTemplateArtifactCodec.Decode(layoutEncoded, layoutArtifact.contentRevision)
+Check(layoutRevisionDiagnostics.length = 0 And layoutEncodeDiagnostics.length = 0 And layoutDecoded.Succeeded() And layoutDecoded.artifact.interfaces[0].runtimeInterfaceSlots.length = 2 And layoutDecoded.artifact.interfaces[0].runtimeInterfaceParents[0].runtimeInterfaceSlots[0].parameters[0].passingMode = PARAMETER_PASS_VAR, "format-35 round-trip retains ordinary Interface slot order, Var ABI and inherited descriptors")
+Local layoutFormat34Diagnostics:String[]
+Check(Not EncodeHistorical(layoutArtifact, 34, layoutFormat34Diagnostics).length And layoutFormat34Diagnostics[0].StartsWith("BMXGT148"), "format-34 cannot publish ordinary Interface slot layouts")
+childSlot.identity = "runtime-slot:7"
+Local malformedLayoutDiagnostics:String[]
+TGenericTemplateArtifactCodec.ComputeContentRevision(layoutArtifact, malformedLayoutDiagnostics)
+Check(malformedLayoutDiagnostics.length And malformedLayoutDiagnostics[0].StartsWith("BMXGT148"), "ordinary Interface slot ordinals are validated before publication")
+childSlot.identity = "runtime-slot:1"
 
 Local functionType:TTemplateTypeReference = New TTemplateTypeReference
 functionType.kind = TEMPLATE_TYPE_CALLABLE

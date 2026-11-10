@@ -39,4 +39,4 @@ for configuration in debug release; do
 	done
 done
 
-echo "bcc2 generic pointer and Method source-boundary regression passed"
+echo "bcc2 generic pointer, Method, and Interface source-boundary regression passed"
