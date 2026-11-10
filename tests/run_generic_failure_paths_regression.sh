@@ -47,7 +47,9 @@ expect_failure runaway BMXC3090 generic_negative_runaway.bmx
 expect_failure initialization-cycle BMXC3091 generic_negative_initialization_cycle.bmx
 expect_failure scalar-throw BMXC3066 generic_negative_scalar_throw.bmx
 expect_failure pointer-element-abi BMXC3016 generic_negative_pointer_element.bmx
-expect_failure computed-method-field BMXC3075 generic_negative_computed_method_field.bmx
+mkdir -p "$output_root/negative/imported-method-field"
+cp "$fixture_dir/generic_negative_imported_field_provider.bmx" "$output_root/negative/imported-method-field/provider.bmx"
+expect_failure imported-method-field BMXC3075 generic_negative_imported_field_consumer.bmx
 
 repair_source="$output_root/repair/app.bmx"
 repair_application="$output_root/repair/generic-failure-repair"

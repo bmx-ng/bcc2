@@ -51,6 +51,10 @@ Function BoundaryBindMember<T>:Closure<Int(value:Int)>(unused:T)
 	Return MakeBoundaryHolder().Owner().Add
 End Function
 
+Function BoundaryBindField<T>:Closure<Int(value:Int)>(unused:T)
+	Return MakeBoundaryHolder().owner.Add
+End Function
+
 Function MakeBoundaryOwnerArray:TBoundaryMethodOwner<Int>[]()
 	Return [MakeBoundaryOwner()]
 End Function

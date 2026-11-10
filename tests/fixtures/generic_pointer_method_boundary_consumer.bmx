@@ -16,10 +16,11 @@ If firstComputed(1) <> 11 Or secondComputed(1) <> 21 Then Throw "computed Method
 Local computedGeneric:Closure<String(value:String)> = BoundaryBindComputedGeneric<String>("unused")
 If computedGeneric("generic") <> "generic" Then Throw "computed specialized generic Method reference failed"
 Local memberComputed:Closure<Int(value:Int)> = BoundaryBindMember<Int>(0)
+Local fieldComputed:Closure<Int(value:Int)> = BoundaryBindField<Int>(0)
 Local indexedComputed:Closure<Int(value:Int)> = BoundaryBindIndexed<Int>(0)
-If boundaryReceiverFactoryCalls <> 5 Then Throw "computed member/index receivers were evaluated more than once"
+If boundaryReceiverFactoryCalls <> 6 Then Throw "computed member/field/index receivers were evaluated more than once"
 GCCollect()
-If memberComputed(1) <> 41 Or indexedComputed(1) <> 51 Then Throw "computed member/index Method references lost their receivers"
+If memberComputed(1) <> 41 Or fieldComputed(1) <> 51 Or indexedComputed(1) <> 61 Then Throw "computed member/field/index Method references lost their receivers"
 
 Local interfaceBox:TBoundaryInterfaceBox<String> = New TBoundaryInterfaceBox<String>
 Local advanced:IBoundaryAdvanced = interfaceBox
