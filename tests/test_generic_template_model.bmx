@@ -212,6 +212,13 @@ Check(finalizeDiagnostics.length = 0 And persistedArtifact.contentRevision = exp
 Check(Not encodedArtifact.Contains("Type TQueue") And Not encodedArtifact.Contains("G<?>"), "canonical artifact contains records rather than copied or compressed BlitzMax source")
 Local decodedResult:TGenericTemplateArtifactDecodeResult = TGenericTemplateArtifactCodec.Decode(encodedArtifact, persistedArtifact.contentRevision)
 Check(decodedResult.Succeeded(), "versioned template artifact validates and round-trips")
+Local previousFormatDiagnostics:String[]
+Local previousFormat:String = EncodeHistorical(persistedArtifact, 33, previousFormatDiagnostics)
+Check(previousFormatDiagnostics.length = 0 And TGenericTemplateArtifactCodec.Decode(previousFormat).Succeeded(), "format-33 artifacts remain readable")
+persistedParameter.capability = GENERIC_CAPABILITY_FLOATING
+Local floatingPreviousFormatDiagnostics:String[]
+Check(Not EncodeHistorical(persistedArtifact, 33, floatingPreviousFormatDiagnostics).length And floatingPreviousFormatDiagnostics.length And floatingPreviousFormatDiagnostics[0].StartsWith("BMXGT146"), "format-33 cannot encode Floating")
+persistedParameter.capability = GENERIC_CAPABILITY_NONE
 Check(decodedResult.artifact.identity.StableName() = persistedArtifact.identity.StableName(), "round-trip retains stable language identity")
 Check(decodedResult.artifact.members.length = 1 And decodedResult.artifact.members[0].body.children[0].children[0].referencedSymbol.StableName() = dependencyReference.StableName(), "round-trip retains typed bodies and symbolic dependency references")
 Check(decodedResult.artifact.body.kind = TEMPLATE_NODE_CONSTRUCTOR_DELEGATION And decodedResult.artifact.body.children[0].valueText = "signature" And decodedResult.artifact.body.children[1].valueText = "arguments", "format-4 round-trip retains explicit constructor delegation shape")

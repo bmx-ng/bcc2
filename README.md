@@ -35,7 +35,7 @@ Verify the compiler installation with:
 /path/to/sdk/bin/bcc --version
 ```
 
-The compiler reports release version `1.00`. Build-manager compatibility is
+The compiler reports release version `1.04`. Build-manager compatibility is
 defined by the matched bmk2/compiler protocol and generated-artifact formats,
 so bcc2 and bmk2 should be installed and updated together.
 
@@ -59,6 +59,26 @@ An explicit source-mode declaration always takes precedence. BLS uses the same
 default; workspaces built with `-nas` can set `noAutoSuperStrict: true` in their
 language-server configuration.
 
+### Numeric generic constraints
+
+Use a capability clause after the type parameter list, for example
+`Struct SVec2<T> Where T Is Floating`. The three built-in capabilities are:
+
+| Capability | Admitted scalar types | Available operations |
+| --- | --- | --- |
+| `Numeric` | Integral and floating types | Arithmetic and comparisons |
+| `Integral` | Integer types | Numeric operations, remainder, shifts, and bitwise operations |
+| `Floating` | `Float` and `Double` | Numeric operations and floating conversions |
+
+An `Integral` or `Floating` parameter also satisfies `Numeric`. A `Floating`
+parameter converts implicitly to `Double`, and a `Float` value converts
+implicitly to a `Floating` parameter. Assignments and returns may narrow a
+`Double` value to a `Floating` parameter, following ordinary `Double` to
+`Float` behavior. A typed `Double` passed as an ordinary argument requires an
+explicit `T(value)` cast; a fitting numeric literal can be passed directly.
+For `Numeric` alone, use explicit casts for conversions between `T` and
+`Double`, since `T` could be an integer type.
+
 ## Tests
 
 Focused tests are ordinary BlitzMax applications. For example:
@@ -72,3 +92,12 @@ The `tests/run_*.sh` scripts provide runtime, module-boundary, incremental-build
 debugger, and generated-matrix coverage. They accept explicit SDK, compiler,
 build-manager, and output paths according to the needs of each test so that
 validation can run without modifying a production SDK.
+
+The numeric generic constraint matrix checks every admitted scalar type and
+supported operator across local and imported generic specializations, plus
+literal, typed-value, argument, assignment, return, and explicit-cast cases.
+Run its compiler, native-runtime, and real-module checks together with:
+
+```sh
+tests/run_numeric_generic_constraint_matrix_regression.sh /path/to/bmk /tmp/numeric-constraint-matrix
+```
