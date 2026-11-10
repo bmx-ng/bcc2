@@ -72,6 +72,11 @@ Function CompilationSummary:String(result:TCompilerResult)
 	Local summary:String = "succeeded=" + result.Succeeded()
 	If result.analysis Then
 		summary :+ ", analysis=" + result.analysis.Succeeded()
+		If result.analysis.snapshot Then
+			For Local diagnostic:TSnapshotDiagnostic = EachIn result.analysis.snapshot.diagnostics
+				summary :+ "; snapshot " + diagnostic.message
+			Next
+		End If
 		If result.analysis.syntaxTree Then
 			For Local diagnostic:TDiagnostic = EachIn result.analysis.syntaxTree.diagnostics
 				summary :+ "; " + diagnostic.code + " " + diagnostic.message
@@ -96,6 +101,7 @@ Type TGenericSnapshotResolver Extends TSnapshotResolver
 	Field includes:TMap = New TMap
 	Field interfaces:TMap = New TMap
 	Field genericTemplates:TMap = New TMap
+	Field coreInterface:TSnapshotText
 
 	Method AddInclude(path:String, text:String)
 		includes.Insert(path.ToLower(), TSnapshotText.Create(path, text))
@@ -109,6 +115,10 @@ Type TGenericSnapshotResolver Extends TSnapshotResolver
 		genericTemplates.Insert(reference.ToLower(), TSnapshotText.Create(path, text))
 	End Method
 
+	Method SetCoreInterface(path:String, text:String)
+		coreInterface = TSnapshotText.Create(path, text)
+	End Method
+
 	Method ResolveInclude:TSnapshotText(includingPath:String, includePath:String)
 		Return TSnapshotText(includes.ValueForKey(includePath.ToLower()))
 	End Method
@@ -118,7 +128,7 @@ Type TGenericSnapshotResolver Extends TSnapshotResolver
 	End Method
 
 	Method ResolveCoreInterface:TSnapshotText(targetPlatform:String)
-		Return Null
+		Return coreInterface
 	End Method
 
 	Method ResolveGenericTemplate:TSnapshotText(interfacePath:String, artifactReference:String)
@@ -918,6 +928,35 @@ Local managedArraySliceCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("
 Check(managedArraySliceCompilation.Succeeded() And managedArraySliceCompilation.genericPlan.units.length = 1, "generic managed Array slicing survives source-free specialization: " + CompilationSummary(managedArraySliceCompilation))
 Local managedArraySliceImplementation:String = managedArraySliceCompilation.genericPlan.units[0].implementation
 Check(managedArraySliceImplementation.Contains("BBARRAY bmx_local_selected = bbArraySlice(~q$~q, bmx_local_data, 1, (bmx_local_data->scales[0]));") And managedArraySliceImplementation.Contains("return ((BBSTRING*)BBARRAYDATA(bmx_local_selected, 1))[0];"), "closed String Array slicing lowers through the established runtime ABI with normalized omitted bounds")
+Local genericStringCoreInterface:String = "superstrict~nObject^Null{~n}=~qbbObjectClass~q~nString^Object{~n-Find:Int(subString:String,startIndex=0)=~qbbStringFind~q~n-Split:String[](separator:String)=~qbbStringSplit~q~n}=~qbbStringClass~q"
+Local genericStringCoreResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
+genericStringCoreResolver.SetCoreInterface("sdk/brl.blitz.i", genericStringCoreInterface)
+genericStringCoreResolver.AddInterface("brl.blitz", "sdk/mod/brl.mod/blitz.mod/blitz.i", "superstrict")
+compilerOptions.requireCoreInterface = True
+Local genericStringOperationsSource:String = "SuperStrict~nFunction StringOperations<T>:String(value:String) Where T Extends Object~nLocal first:Int=value[0]~nLocal head:String=value[..2]~nLocal tail:String=value[2..]~nLocal middle:String=value[1..-1]~nLocal found:Int=value.Find(~qcd~q)~nLocal parts:String[]=value.Split(~q,~q)~nReturn head+tail+middle+String(first)+String(found)+parts[0]~nEnd Function~nGlobal stringOperations:String=StringOperations<Object>(~qab,cd~q)"
+Local genericStringOperationsCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-string-operations.bmx", genericStringOperationsSource, genericStringCoreResolver, compilerOptions)
+Check(genericStringOperationsCompilation.Succeeded() And genericStringOperationsCompilation.genericPlan.units.length = 1, "generic String indexing, slicing, and runtime methods survive canonical specialization: " + CompilationSummary(genericStringOperationsCompilation))
+Local genericStringOperationsImplementation:String = genericStringOperationsCompilation.genericPlan.units[0].implementation
+Check(genericStringOperationsImplementation.Contains("->buf[(BBUINT)(0)]") And Occurrences(genericStringOperationsImplementation, "bbStringSlice(") = 3 And genericStringOperationsImplementation.Contains("bbStringFind(") And genericStringOperationsImplementation.Contains("bbStringSplit("), "generic String operations lower through their established desktop runtime ABIs")
+Local genericStringModuleSource:String = "SuperStrict~nModule Acme.GenericStringOperations~nFunction ImportedStringOperations<T>:String(value:String) Where T Extends Object~nLocal selected:String=value[1..-1]~nLocal found:Int=value.Find(~qb~q)~nLocal parts:String[]=value.Split(~q,~q)~nReturn selected+String(found)+parts[0]~nEnd Function"
+Local genericStringModule:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/acme.mod/genericstringoperations.mod/genericstringoperations.bmx", genericStringModuleSource, genericStringCoreResolver, compilerOptions)
+Local genericStringArtifactDiagnostics:TCompilerDiagnostic[]
+Local genericStringOutputs:TCompilerGenericTemplateOutput[] = TBlitzMaxCompiler.EmitGenericTemplateArtifacts(genericStringModule, genericStringArtifactDiagnostics)
+Local genericStringInterfaceDiagnostics:TCompilerDiagnostic[]
+Local genericStringInterface:String = TBlitzMaxCompiler.EmitInterface(genericStringModule, genericStringInterfaceDiagnostics)
+Local genericStringResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
+genericStringResolver.SetCoreInterface("sdk/brl.blitz.i", genericStringCoreInterface)
+genericStringResolver.AddInterface("brl.blitz", "sdk/mod/brl.mod/blitz.mod/blitz.i", "superstrict")
+genericStringResolver.AddInterface("acme.genericstringoperations", "sdk/acme.genericstringoperations.i", genericStringInterface)
+For Local genericStringOutput:TCompilerGenericTemplateOutput = EachIn genericStringOutputs
+	genericStringResolver.AddGenericTemplate(genericStringOutput.artifactReference, "sdk/" + genericStringOutput.artifactReference, genericStringOutput.content)
+Next
+Local genericStringConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("generic-imported-string-operations.bmx", "SuperStrict~nImport Acme.GenericStringOperations~nGlobal importedString:String=ImportedStringOperations<Object>(~qa,b~q)", genericStringResolver, compilerOptions)
+Local genericStringImportedImplementation:String
+If genericStringConsumer.genericPlan And genericStringConsumer.genericPlan.units.length Then genericStringImportedImplementation = genericStringConsumer.genericPlan.units[0].implementation
+Check(genericStringModule.Succeeded() And genericStringArtifactDiagnostics.length = 0 And genericStringInterfaceDiagnostics.length = 0 And genericStringOutputs.length = 1 And genericStringConsumer.Succeeded(), "generic String operations round-trip through a source-free module template: " + CompilationSummary(genericStringConsumer))
+Check(genericStringImportedImplementation.Contains("bbStringSlice(") And genericStringImportedImplementation.Contains("bbStringFind(") And genericStringImportedImplementation.Contains("bbStringSplit("), "imported generic String operations retain slice and runtime-method linkage metadata")
+compilerOptions.requireCoreInterface = False
 Local multidimensionalGenericArraySource:String = "SuperStrict~nFunction MatrixRoundTrip<T>:T(value:T)~nLocal matrix:T[,] = New T[2,3]~nmatrix[1,2] = value~nFor Local item:T = EachIn matrix~nIf item = value Then Return matrix[1,2]~nNext~nEnd Function~nGlobal matrixText:String = MatrixRoundTrip<String>(~qmatrix~q)"
 Local multidimensionalGenericArrayCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-multidimensional-array.bmx", multidimensionalGenericArraySource, Null, compilerOptions)
 Check(multidimensionalGenericArrayCompilation.Succeeded() And multidimensionalGenericArrayCompilation.genericPlan.units.length = 1, "multidimensional generic managed Arrays survive source-free allocation, indexing, and flattened EachIn: " + CompilationSummary(multidimensionalGenericArrayCompilation))
