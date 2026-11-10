@@ -37,18 +37,15 @@ Type TMatrixConversion
 	Field returnType:String
 	Field body:String
 	Field acceptedMask:Int
-	Field specializedMask:Int
 	Field rejectedCode:String
 End Type
 
-Function Conversion:TMatrixConversion(name:String, returnType:String, body:String, acceptedMask:Int, rejectedCode:String = "BMX3310", specializedMask:Int = -1)
+Function Conversion:TMatrixConversion(name:String, returnType:String, body:String, acceptedMask:Int, rejectedCode:String = "BMX3310")
 	Local result:TMatrixConversion = New TMatrixConversion
 	result.name = name
 	result.returnType = returnType
 	result.body = body
 	result.acceptedMask = acceptedMask
-	If specializedMask < 0 Then specializedMask = acceptedMask
-	result.specializedMask = specializedMask
 	result.rejectedCode = rejectedCode
 	Return result
 End Function
@@ -91,7 +88,6 @@ Function Diagnostics:String(result:TCompilerResult)
 End Function
 
 Global matrixChecked:Int
-Global matrixKnownFailures:Int
 
 Function Verify(label:String, source:String, expected:Int, code:String, resolver:TSnapshotResolver, options:TCompilerOptions)
 	matrixChecked :+ 1
@@ -139,9 +135,7 @@ Local operations:TMatrixOperation[] = [ ..
 ' Bit 0 = Numeric, bit 1 = Integral, bit 2 = Floating.
 Local conversions:TMatrixConversion[] = [ ..
 	Conversion("T to Double return", "Double", "Return value", 4), ..
-	' Open binding defers this ordinary free call, but specialization currently
-	' loses the canonical call target. Keep the failure visible until repaired.
-	Conversion("T to Double argument", "Double", "Return MTakeDouble(value)", 7, "", 4), ..
+	Conversion("T to Double argument", "Double", "Return MTakeDouble(value)", 4, "BMX3302"), ..
 	Conversion("Float to T return", "T", "Local amount:Float = 2.5~nReturn amount", 4), ..
 	Conversion("Float to T assignment", "T", "Local amount:Float = 2.5~nLocal result:T = amount~nReturn result", 4), ..
 	Conversion("Float to T argument", "T", "Local amount:Float = 2.5~nReturn M$PTake<T>(amount)", 4, "BMX3302"), ..
@@ -236,15 +230,8 @@ For Local capabilityIndex:Int = 0 Until capabilities.length
 			If returnType = "T" Then returnType = typeName
 			Local body:String = "Local seed:" + typeName + " = 2~nLocal result:" + returnType + " = " + functionName + "<" + typeName + ">(seed)"
 			Local localSource:String = "SuperStrict~n" + doubleHelper + "Function M" + prefix + "Take<T>:T(value:T) Where T Is " + capability + "~nReturn value~nEnd Function~n" + ConversionSource(capability, prefix, conversion, functionName) + body
-			Local specialized:Int = (conversion.specializedMask & (1 Shl capabilityIndex)) <> 0
-			If conversion.name = "T to Double argument" And typeName = "Double" Then specialized = True
-			Local specializedCode:String
-			If Not specialized Then
-				specializedCode = "BMXC3027"
-				matrixKnownFailures :+ 2
-			End If
-			Verify("local conversion " + capability + " " + typeName + " " + conversion.name, localSource, specialized, specializedCode, Null, options)
-			Verify("imported conversion " + capability + " " + typeName + " " + conversion.name, "SuperStrict~nImport ConstraintMatrix.Owner~n" + body, specialized, specializedCode, resolver, options)
+			Verify("local conversion " + capability + " " + typeName + " " + conversion.name, localSource, True, "", Null, options)
+			Verify("imported conversion " + capability + " " + typeName + " " + conversion.name, "SuperStrict~nImport ConstraintMatrix.Owner~n" + body, True, "", resolver, options)
 		Next
 		Local callExpressions:String[] = ["2", "2.5", "typedFloat", "typedDouble", "1e39"]
 		Local callNames:String[] = ["integer literal", "fractional literal", "typed Float", "typed Double", "large Double literal"]
@@ -275,4 +262,4 @@ Local warnedCall:String = "Local amount:Double = 2.5~nLocal result:Float = MFTak
 VerifyWarning("local warning-mode narrowing", "SuperStrict~nFunction MFTake<T>:T(value:T) Where T Is Floating~nReturn value~nEnd Function~n" + warnedCall, "BMX3412", Null, warningOptions)
 VerifyWarning("imported warning-mode narrowing", "SuperStrict~nImport ConstraintMatrix.Owner~n" + warnedCall, "BMX3412", resolver, warningOptions)
 
-Print "numeric generic constraint matrix passed: " + matrixChecked + " cases (" + matrixKnownFailures + " known deferred-call failures)"
+Print "numeric generic constraint matrix passed: " + matrixChecked + " cases"
