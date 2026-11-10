@@ -6,6 +6,14 @@ Global pointerCalls:Int
 Global indexCalls:Int
 Global activePointer:Int Ptr
 
+Struct SPointerValue
+	Field number:Int
+End Struct
+
+Enum EPointerValue:Byte
+	Ready = 7
+	Done = 9
+End Enum
 
 Function PointerOnce:Int Ptr()
 	pointerCalls :+ 1
@@ -67,5 +75,20 @@ floats[1] = 1.25
 Local floatPointer:Float Ptr = Varptr floats[0]
 If ReadAt<Float>(floatPointer, 1) <> 1.25 Then Throw "Float pointer read failed"
 
+Local StaticArray records:SPointerValue[2]
+records[1].number = 37
+Local recordPointer:SPointerValue Ptr = Varptr records[0]
+If ReadAt<SPointerValue>(recordPointer, 1).number <> 37 Then Throw "Struct pointer read failed"
+Local replacement:SPointerValue
+replacement.number = 41
+WriteAt<SPointerValue>(recordPointer, 0, replacement)
+If records[0].number <> 41 Then Throw "Struct pointer assignment failed"
+
+Local StaticArray states:EPointerValue[2]
+states[1] = EPointerValue.Done
+Local statePointer:EPointerValue Ptr = Varptr states[0]
+If ReadAt<EPointerValue>(statePointer, 1) <> EPointerValue.Done Then Throw "Enum pointer read failed"
+WriteAt<EPointerValue>(statePointer, 0, EPointerValue.Ready)
+If states[0] <> EPointerValue.Ready Then Throw "Enum pointer assignment failed"
 
 Print "generic-pointer-index-ok"
