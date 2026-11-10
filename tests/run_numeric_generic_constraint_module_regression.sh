@@ -26,6 +26,7 @@ interface=$(find "$module_dir" -maxdepth 1 -name 'owner.release.*.i' -type f)
 test -f "$interface"
 grep -q 'Where T Is Numeric' "$interface"
 grep -q 'Where T Is Integral' "$interface"
+grep -q 'Where T Is Floating' "$interface"
 cat > "$output_root/rejected-type.bmx" <<'SOURCE'
 SuperStrict
 Import Bcc2NumericConstraintTest.Owner
@@ -36,6 +37,16 @@ if "$bmk" makeapp -a -r -o "$output_root/rejected-type" "$output_root/rejected-t
 	exit 1
 fi
 grep -q 'BMX3209' "$output_root/rejected-type.log"
+cat > "$output_root/rejected-floating-type.bmx" <<'SOURCE'
+SuperStrict
+Import Bcc2NumericConstraintTest.Owner
+Local bad:SFloatingBox<Int>
+SOURCE
+if "$bmk" makeapp -a -r -o "$output_root/rejected-floating-type" "$output_root/rejected-floating-type.bmx" > "$output_root/rejected-floating-type.log" 2>&1; then
+	echo "imported Floating type accepted Int" >&2
+	exit 1
+fi
+grep -q 'BMX3209' "$output_root/rejected-floating-type.log"
 cat > "$output_root/rejected-routine.bmx" <<'SOURCE'
 SuperStrict
 Import Bcc2NumericConstraintTest.Owner

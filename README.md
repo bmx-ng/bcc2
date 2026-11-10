@@ -59,6 +59,26 @@ An explicit source-mode declaration always takes precedence. BLS uses the same
 default; workspaces built with `-nas` can set `noAutoSuperStrict: true` in their
 language-server configuration.
 
+### Numeric generic constraints
+
+Use a capability clause after the type parameter list, for example
+`Struct SVec2<T> Where T Is Floating`. The three built-in capabilities are:
+
+| Capability | Admitted scalar types | Available operations |
+| --- | --- | --- |
+| `Numeric` | Integral and floating types | Arithmetic and comparisons |
+| `Integral` | Integer types | Numeric operations, remainder, shifts, and bitwise operations |
+| `Floating` | `Float` and `Double` | Numeric operations and floating conversions |
+
+An `Integral` or `Floating` parameter also satisfies `Numeric`. A `Floating`
+parameter converts implicitly to `Double`, and a `Float` value converts
+implicitly to a `Floating` parameter. Assignments and returns may narrow a
+`Double` value to a `Floating` parameter, following ordinary `Double` to
+`Float` behavior. A typed `Double` passed as an ordinary argument requires an
+explicit `T(value)` cast; a fitting numeric literal can be passed directly.
+For `Numeric` alone, use explicit casts for conversions between `T` and
+`Double`, since `T` could be an integer type.
+
 ## Tests
 
 Focused tests are ordinary BlitzMax applications. For example:

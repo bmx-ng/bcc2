@@ -10,3 +10,10 @@ End Function
 Struct SIntegralBox<T> Where T Is Integral
 	Field value:T
 End Struct
+
+Struct SFloatingBox<T> Where T Is Floating
+	Field value:T
+	Method DoubleValue:Double()
+		Return value
+	End Method
+End Struct

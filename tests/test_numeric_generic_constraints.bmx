@@ -49,6 +49,21 @@ For Local name:String = EachIn primitiveNames
 	Check(result.Succeeded(), "Numeric inference and representable constants must support " + name)
 Next
 
+Local floating:String = "Function Sqr:Double(value:Double)~nReturn value~nEnd Function~nFunction Length<T>:T(x:T, y:T) Where T Is Floating~nReturn Sqr(x * x + y * y)~nEnd Function"
+For Local name:String = EachIn primitiveNames
+	Local source:String = "SuperStrict~n" + floating + "~nLocal n:" + name + " = 3~nLocal answer:" + name + " = Length(n, 4)"
+	Local result:TCompilerResult = TBlitzMaxCompiler.Compile("floating-" + name + ".bmx", source, Null, options)
+	If name = "Float" Or name = "Double" Then
+		Check(result.Succeeded(), "Floating supports " + name + " and an implicit Sqr result")
+	Else
+		Check(Not result.Succeeded() And HasDiagnostic(result, "BMX3302"), "Floating rejects " + name)
+	End If
+Next
+For Local name:String = EachIn ["Bool", "String"]
+	Local result:TCompilerResult = TBlitzMaxCompiler.Compile("floating-nonmember-" + name + ".bmx", "SuperStrict~n" + floating + "~nLocal answer:" + name + " = Length<" + name + ">(1, 2)", Null, options)
+	Check(Not result.Succeeded() And HasDiagnostic(result, "BMX3302"), "Floating rejects " + name)
+Next
+
 Local integral:String = "Function Combine<T>:T(a:T, b:T) Where T Is Integral~nReturn (a Mod b) Shl 1~nEnd Function"
 For Local name:String = EachIn primitiveNames
 	Local source:String = "SuperStrict~n" + integral + "~nLocal a:" + name + " = 3~nLocal result:" + name + " = Combine(a, 2)"
@@ -85,6 +100,10 @@ For Local operatorText:String = EachIn integralOnlyOperators
 Next
 Local invalidCompound:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-compound.bmx", "SuperStrict~nFunction Apply<T>:T(a:T,b:T) Where T Is Numeric~na :Mod b~nReturn a~nEnd Function", Null, options)
 Check(Not invalidCompound.Succeeded() And HasDiagnostic(invalidCompound, "BMX3305"), "Numeric excludes integral compound assignment")
+For Local operatorText:String = EachIn integralOnlyOperators
+	Local invalidBody:TCompilerResult = TBlitzMaxCompiler.Compile("floating-operator-" + operatorText + ".bmx", "SuperStrict~nFunction Apply<T>:T(a:T,b:T) Where T Is Floating~nReturn a " + operatorText + " b~nEnd Function", Null, options)
+	Check(Not invalidBody.Succeeded() And HasDiagnostic(invalidBody, "BMX3305"), "Floating excludes integral-only operator " + operatorText)
+Next
 Local unknownCapability:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-unknown-capability.bmx", "SuperStrict~nFunction Apply<T>:T(a:T) Where T Is Geometry~nReturn a~nEnd Function", Null, options)
 Check(Not unknownCapability.Succeeded() And HasDiagnostic(unknownCapability, "BMX3210"), "unknown capability is diagnosed at its declaration")
 Local multipleCapabilities:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-multiple-capabilities.bmx", "SuperStrict~nFunction Combine<T,U>:T(a:T,b:U) Where T Is Numeric, U Is Integral~nReturn a~nEnd Function~nLocal n:Double = 0.5~nLocal i:Int = 1~nLocal result:Double = Combine(n,i)", Null, options)
@@ -92,6 +111,10 @@ Check(multipleCapabilities.Succeeded(), "comma-separated capability clauses bind
 
 Local typeSource:String = "SuperStrict~nStruct SBox<T> Where T Is Integral~nField value:T~nEnd Struct~nStruct SWrapped<U> Where U Is Integral~nField inner:SBox<U>~nEnd Struct~nLocal box:SWrapped<Int>"
 Check(TBlitzMaxCompiler.Compile("numeric-types.bmx", typeSource, Null, options).Succeeded(), "Integral capability flows through open generic types")
+Local floatingTypeSource:String = "SuperStrict~nStruct SNumericBox<T> Where T Is Numeric~nField value:T~nEnd Struct~nStruct SFloatingBox<T> Where T Is Floating~nField value:T~nEnd Struct~nStruct SWrapped<U> Where U Is Floating~nField numeric:SNumericBox<U>~nField floating:SFloatingBox<U>~nEnd Struct~nLocal box:SWrapped<Float>"
+Check(TBlitzMaxCompiler.Compile("floating-types.bmx", floatingTypeSource, Null, options).Succeeded(), "Floating capability flows through open generic types and satisfies Numeric")
+Local weakNestedType:TCompilerResult = TBlitzMaxCompiler.Compile("floating-weak-nested-type.bmx", "SuperStrict~nStruct SFloatingBox<T> Where T Is Floating~nEnd Struct~nStruct SWrapped<U> Where U Is Numeric~nField floating:SFloatingBox<U>~nEnd Struct", Null, options)
+Check(Not weakNestedType.Succeeded() And HasDiagnostic(weakNestedType, "BMX3209"), "Numeric alone does not satisfy Floating")
 Local invalidType:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-type-invalid.bmx", "SuperStrict~nStruct SBox<T> Where T Is Integral~nField value:T~nEnd Struct~nLocal box:SBox<Float>", Null, options)
 Check(Not invalidType.Succeeded() And HasDiagnostic(invalidType, "BMX3209"), "closed type arguments enforce Integral")
 Local inheritedType:TLanguageAnalysis = TBlitzMaxLanguage.AnalyzeText("SuperStrict~nType TBase~nEnd Type~nType TChild<T> Where T Is Numeric Extends TBase~nEnd Type~nLocal child:TChild<Int>", "numeric-inherited-type.bmx")
@@ -108,6 +131,12 @@ Local implicitWidening:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-impl
 Check(Not implicitWidening.Succeeded() And HasDiagnostic(implicitWidening, "BMX3310"), "Numeric T to Double requires an explicit cast")
 Local negativeLiteral:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-negative-literal.bmx", "SuperStrict~nStruct SScale<T> Where T Is Numeric~nMethod Operator*:SScale<T>(amount:T)~nReturn Self~nEnd Method~nMethod Scale:SScale<T>()~nReturn Self * -1~nEnd Method~nEnd Struct", Null, options)
 Check(Not negativeLiteral.Succeeded() And HasDiagnostic(negativeLiteral, "BMX3302"), "negative literal cannot implicitly become every Numeric type")
+Local floatingConversions:String = "SuperStrict~nFunction Sqr:Double(value:Double)~nReturn value~nEnd Function~nStruct SScale<T> Where T Is Floating~nField amount:T~nMethod Operator*:SScale<T>(factor:T)~nReturn Self~nEnd Method~nMethod Scale:SScale<T>()~nReturn Self * 2.5~nEnd Method~nMethod Length:T()~nReturn Sqr(amount * amount)~nEnd Method~nMethod ToDouble:Double()~nReturn amount~nEnd Method~nMethod FromFloat:T()~nLocal value:Float = 2.5~nReturn value~nEnd Method~nMethod FromDouble:T()~nLocal value:Double = 2.5~nReturn value~nEnd Method~nMethod Explicit:T()~nLocal value:Double = 2.5~nReturn T(value)~nEnd Method~nEnd Struct~nLocal f:SScale<Float>~nLocal d:SScale<Double>"
+Check(TBlitzMaxCompiler.Compile("floating-conversions.bmx", floatingConversions, Null, options).Succeeded(), "Floating supports typed Float widening, Double assignment narrowing, scalar casts and decimal literals")
+Local floatingArgument:TCompilerResult = TBlitzMaxCompiler.Compile("floating-typed-double-argument.bmx", "SuperStrict~nStruct SScale<T> Where T Is Floating~nMethod Take(value:T)~nEnd Method~nMethod Apply()~nLocal value:Double = 2.5~nTake(value)~nEnd Method~nEnd Struct", Null, options)
+Check(Not floatingArgument.Succeeded() And HasDiagnostic(floatingArgument, "BMX3302"), "typed Double argument needs a cast for Floating T")
+Local floatingCastArgument:String = "SuperStrict~nStruct SScale<T> Where T Is Floating~nMethod Take(value:T)~nEnd Method~nMethod Apply()~nLocal value:Double = 2.5~nTake(T(value))~nEnd Method~nEnd Struct~nLocal f:SScale<Float>"
+Check(TBlitzMaxCompiler.Compile("floating-cast-argument.bmx", floatingCastArgument, Null, options).Succeeded(), "explicit Double-to-T cast works for a Floating argument")
 Local genericMethodSource:String = "SuperStrict~nStruct SMath~nMethod Twice<U>:U(value:U) Where U Is Numeric~nReturn value + value~nEnd Method~nEnd Struct~nLocal math:SMath~nLocal n:Double = 0.5~nLocal result:Double = math.Twice(n)"
 Check(TBlitzMaxCompiler.Compile("numeric-generic-method.bmx", genericMethodSource, Null, options).Succeeded(), "method-owned numeric capability specializes")
 Local overloadSource:String = "SuperStrict~nFunction Choose<T>:Int(value:T) Where T Is Numeric~nReturn 1~nEnd Function~nFunction Choose:Int(value:String)~nReturn 2~nEnd Function~nLocal number:Int = Choose(1)~nLocal text:Int = Choose(~qtext~q)"
@@ -118,16 +147,16 @@ includeResolver.includes.Insert("numeric-declarations.bmx", TSnapshotText.Create
 Local includeConsumer:String = "SuperStrict~nInclude ~qnumeric-declarations.bmx~q~nLocal value:Double = 0.5~nLocal result:Double = Clamp(value, 0, 1)"
 Check(TBlitzMaxCompiler.Compile("numeric-include.bmx", includeConsumer, includeResolver, options).Succeeded(), "Include preserves capability inference")
 
-Local provider:String = "SuperStrict~nModule Constraints.NumericApi~n" + clamp + "~nStruct SBox<T> Where T Is Integral~nField value:T~nEnd Struct"
+Local provider:String = "SuperStrict~nModule Constraints.NumericApi~n" + clamp + "~nStruct SBox<T> Where T Is Integral~nField value:T~nEnd Struct~nStruct SFloatingBox<T> Where T Is Floating~nField value:T~nMethod DoubleValue:Double()~nReturn value~nEnd Method~nEnd Struct"
 Local published:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/constraints.mod/numericapi.mod/numericapi.bmx", provider, Null, options)
 Check(published.Succeeded(), "constrained module compiles")
 Local outputs:TCompilerGenericTemplateOutput[]
 Local artifactDiagnostics:TCompilerDiagnostic[]
 outputs = TBlitzMaxCompiler.EmitGenericTemplateArtifacts(published, artifactDiagnostics)
-Check(artifactDiagnostics.length = 0 And outputs.length = 2, "constrained module emits two generic companions")
+Check(artifactDiagnostics.length = 0 And outputs.length = 3, "constrained module emits three generic companions")
 Local interfaceDiagnostics:TCompilerDiagnostic[]
 Local interfaceText:String = TBlitzMaxCompiler.EmitInterface(published, interfaceDiagnostics)
-Check(interfaceDiagnostics.length = 0 And interfaceText.Contains("Where T Is Numeric") And interfaceText.Contains("Where T Is Integral"), "compact interface preserves capability clauses")
+Check(interfaceDiagnostics.length = 0 And interfaceText.Contains("Where T Is Numeric") And interfaceText.Contains("Where T Is Integral") And interfaceText.Contains("Where T Is Floating"), "compact interface preserves capability clauses")
 Local resolver:TConstraintResolver = New TConstraintResolver
 resolver.interfaces.Insert("constraints.numericapi", TSnapshotText.Create("sdk/constraints.numericapi.i", interfaceText))
 For Local output:TCompilerGenericTemplateOutput = EachIn outputs
@@ -141,11 +170,16 @@ For Local output:TCompilerGenericTemplateOutput = EachIn outputs
 		Local registry:TGenericSpecializationRegistry = TGenericSpecializationRegistry.Create(Null)
 		Check(Not registry.Request(decoded.artifact, [floatType], Null) And registry.diagnostics.length = 1 And registry.diagnostics[0].Contains("BMXC3093"), "closed specialization validates artifact capabilities independently")
 	End If
+	If output.artifact.identity.qualifiedName = "SFloatingBox" Then
+		Check(decoded.artifact.parameters[0].capability = GENERIC_CAPABILITY_FLOATING, "artifact round trip retains Floating")
+	End If
 Next
-Local consumer:String = "SuperStrict~nImport Constraints.NumericApi~nLocal n:Float = 0.5~nLocal result:Float = Clamp(n, 0, 1)~nLocal box:SBox<Int>"
+Local consumer:String = "SuperStrict~nImport Constraints.NumericApi~nLocal n:Float = 0.5~nLocal result:Float = Clamp(n, 0, 1)~nLocal box:SBox<Int>~nLocal floating:SFloatingBox<Float>"
 Check(TBlitzMaxCompiler.Compile("numeric-consumer.bmx", consumer, resolver, options).Succeeded(), "compiled interface consumer resolves inferred Numeric and Integral type")
 Local rejectedConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-rejected-consumer.bmx", "SuperStrict~nImport Constraints.NumericApi~nLocal box:SBox<Float>", resolver, options)
 Check(Not rejectedConsumer.Succeeded() And HasDiagnostic(rejectedConsumer, "BMX3209"), "compiled interface retains Integral rejection")
+Local rejectedFloatingConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("floating-rejected-consumer.bmx", "SuperStrict~nImport Constraints.NumericApi~nLocal box:SFloatingBox<Int>", resolver, options)
+Check(Not rejectedFloatingConsumer.Succeeded() And HasDiagnostic(rejectedFloatingConsumer, "BMX3209"), "compiled interface retains Floating rejection")
 Local rejectedRoutineConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("numeric-rejected-routine-consumer.bmx", "SuperStrict~nImport Constraints.NumericApi~nLocal result:String = Clamp<String>(~qa~q, ~qa~q, ~qz~q)", resolver, options)
 Check(Not rejectedRoutineConsumer.Succeeded() And HasDiagnostic(rejectedRoutineConsumer, "BMX3302"), "compiled interface retains routine applicability")
 

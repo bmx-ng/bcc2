@@ -34,6 +34,28 @@ Struct SLength<T> Where T Is Numeric
 	End Method
 End Struct
 
+Struct SFloatingLength<T> Where T Is Floating
+	Field x:T
+	Field y:T
+
+	Method New(x:T, y:T)
+		Self.x = x
+		Self.y = y
+	End Method
+
+	Method LengthSquared:T()
+		Return x * x + y * y
+	End Method
+
+	Method Length:T()
+		Return Sqr(LengthSquared())
+	End Method
+
+	Method DoubleValue:Double()
+		Return x
+	End Method
+End Struct
+
 Struct SReflect<T> Where T Is Numeric
 	Field x:T
 	Field y:T
@@ -101,4 +123,8 @@ If reflectedInt.x <> 1 Or reflectedInt.y <> -2 Then Throw "integral vector refle
 Local lengthFloat:SLength<Float> = New SLength<Float>(3.0, 4.0)
 Local lengthInt:SLength<Int> = New SLength<Int>(3, 4)
 If lengthFloat.Length() <> 5.0 Or lengthInt.Length() <> 5 Then Throw "numeric vector length casts"
+Local floatingLengthFloat:SFloatingLength<Float> = New SFloatingLength<Float>(3.0, 4.0)
+Local floatingLengthDouble:SFloatingLength<Double> = New SFloatingLength<Double>(3.0, 4.0)
+If floatingLengthFloat.Length() <> 5.0 Or floatingLengthDouble.Length() <> 5.0 Then Throw "floating vector length"
+If floatingLengthFloat.DoubleValue() <> 3.0 Then Throw "floating vector widening"
 Print "numeric-generic-constraint-runtime-ok"
