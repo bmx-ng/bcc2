@@ -31,8 +31,8 @@ engine_root="$output_root/engine"
 
 mkdir -p "$one_shot_root" "$engine_root"
 
-test "$("$compiler" | tr -d '\r')" = "bcc Release Version 1.00"
-test "$("$compiler" --version | tr -d '\r')" = "bcc Release Version 1.00"
+test "$("$compiler" | tr -d '\r')" = "bcc Release Version 1.04"
+test "$("$compiler" --version | tr -d '\r')" = "bcc Release Version 1.04"
 
 one_shot_output=$("$compiler" \
 	--emit-build \

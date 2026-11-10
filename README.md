@@ -35,7 +35,7 @@ Verify the compiler installation with:
 /path/to/sdk/bin/bcc --version
 ```
 
-The compiler reports release version `1.00`. Build-manager compatibility is
+The compiler reports release version `1.04`. Build-manager compatibility is
 defined by the matched bmk2/compiler protocol and generated-artifact formats,
 so bcc2 and bmk2 should be installed and updated together.
 
