@@ -46,6 +46,9 @@ expect_failure recursive-struct BMXC3008 generic_negative_recursive_struct.bmx
 expect_failure runaway BMXC3090 generic_negative_runaway.bmx
 expect_failure initialization-cycle BMXC3091 generic_negative_initialization_cycle.bmx
 expect_failure scalar-throw BMXC3066 generic_negative_scalar_throw.bmx
+expect_failure pointer-element-abi BMXC3016 generic_negative_pointer_element.bmx
+expect_failure computed-method-receiver BMXC3075 generic_negative_computed_method_receiver.bmx
+expect_failure runtime-interface-table BMXC3017 generic_negative_runtime_interface_table.bmx
 
 repair_source="$output_root/repair/app.bmx"
 repair_application="$output_root/repair/generic-failure-repair"
