@@ -545,6 +545,26 @@ Local arrayEncodeDiagnostics:String[]
 Local arrayEncodedArtifact:String = TGenericTemplateArtifactCodec.Encode(arrayArtifact, arrayEncodeDiagnostics)
 Local arrayDecodedResult:TGenericTemplateArtifactDecodeResult = TGenericTemplateArtifactCodec.Decode(arrayEncodedArtifact, arrayArtifact.contentRevision)
 Check(arrayRevisionDiagnostics.length = 0 And arrayEncodeDiagnostics.length = 0 And arrayDecodedResult.Succeeded() And arrayDecodedResult.artifact.body.children[0].kind = TEMPLATE_NODE_ARRAY_LENGTH And arrayDecodedResult.artifact.body.children[1].kind = TEMPLATE_NODE_ARRAY_ELEMENT And arrayDecodedResult.artifact.body.children[2].kind = TEMPLATE_NODE_ARRAY_SLICE And arrayDecodedResult.artifact.body.children[3].kind = TEMPLATE_NODE_EXPRESSION_STATEMENT And arrayDecodedResult.artifact.body.children[4].kind = TEMPLATE_NODE_THROW And arrayDecodedResult.artifact.body.children[5].kind = TEMPLATE_NODE_ASSERT And arrayDecodedResult.artifact.body.children[6].valueText = "local-routine-signature", "format-17 round-trip retains target-independent managed Array operations, expression statements, Throw, Assert, and local routine records")
+Local rawPointerType:TTemplateTypeReference = New TTemplateTypeReference
+rawPointerType.kind = TEMPLATE_TYPE_POINTER
+rawPointerType.elementType = intType
+Local rawPointerReceiver:TGenericTemplateNode = New TGenericTemplateNode
+rawPointerReceiver.kind = TEMPLATE_NODE_NAME
+rawPointerReceiver.valueText = "pointer"
+rawPointerReceiver.semanticType = rawPointerType
+Local rawPointerElement:TGenericTemplateNode = New TGenericTemplateNode
+rawPointerElement.kind = TEMPLATE_NODE_ARRAY_ELEMENT
+rawPointerElement.semanticType = intType
+rawPointerElement.children = [rawPointerReceiver, arrayIndex]
+Local pointerArtifact:TGenericTemplateArtifact = New TGenericTemplateArtifact
+pointerArtifact.identity = runtimeIdentity
+pointerArtifact.body = rawPointerElement
+Local pointerRevisionDiagnostics:String[]
+pointerArtifact.contentRevision = TGenericTemplateArtifactCodec.ComputeContentRevision(pointerArtifact, pointerRevisionDiagnostics)
+Local pointerEncodeDiagnostics:String[]
+Local pointerEncoded:String = TGenericTemplateArtifactCodec.Encode(pointerArtifact, pointerEncodeDiagnostics)
+Local pointerDecoded:TGenericTemplateArtifactDecodeResult = TGenericTemplateArtifactCodec.Decode(pointerEncoded, pointerArtifact.contentRevision)
+Check(pointerRevisionDiagnostics.length = 0 And pointerEncodeDiagnostics.length = 0 And pointerDecoded.Succeeded() And pointerDecoded.artifact.body.kind = TEMPLATE_NODE_ARRAY_ELEMENT And pointerDecoded.artifact.body.children[0].semanticType.kind = TEMPLATE_TYPE_POINTER And pointerDecoded.artifact.body.children[0].semanticType.elementType.CanonicalName() = "int", "raw pointer indexing round-trips through the existing element node without a format change")
 arrayType.rank = 2
 arrayElement.children = [arrayReceiver, arrayIndex, arrayIndex]
 Local multidimensionalRevisionDiagnostics:String[]
