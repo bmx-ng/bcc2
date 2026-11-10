@@ -3641,6 +3641,19 @@ Check(containingTypeHelperCompilation.Succeeded() And containingTypeHelperCompil
 Local ordinaryStructOperatorSource:String = "SuperStrict~nStruct SOrdinaryAmount~nField value:Int~nMethod Operator +:SOrdinaryAmount(delta:Int)~nSelf.value :+ delta~nReturn Self~nEnd Method~nEnd Struct~nType TOrdinaryOperatorCall<T>~nMethod Add:SOrdinaryAmount(value:SOrdinaryAmount)~nReturn value + 1~nEnd Method~nEnd Type~nGlobal ordinaryOperatorCall:TOrdinaryOperatorCall<String>"
 Local ordinaryStructOperatorCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-ordinary-struct-operator.bmx", ordinaryStructOperatorSource, Null, compilerOptions)
 Check(ordinaryStructOperatorCompilation.Succeeded() And ordinaryStructOperatorCompilation.genericPlan.units[0].implementation.Contains("bmx_generic_dependency_sordinaryamount__add_") And ordinaryStructOperatorCompilation.genericPlan.units[0].implementation.Contains("(&(value)), ((BBINT)1))"), "resolved ordinary Struct operators lower as direct pointer-receiver dependencies instead of falling into intrinsic C operator handling: " + CompilationSummary(ordinaryStructOperatorCompilation))
+Local genericStructOperatorSource:String = "SuperStrict~nStruct SGenericAmount<T>~nField value:T~nMethod Operator +:SGenericAmount<T>(other:SGenericAmount<T>)~nLocal result:SGenericAmount<T>~nresult.value=value+other.value~nReturn result~nEnd Method~nMethod AddTwice:SGenericAmount<T>(other:SGenericAmount<T>)~nReturn Self+other+other~nEnd Method~nEnd Struct~nGlobal genericIntAmount:SGenericAmount<Int>~nGlobal genericIntOther:SGenericAmount<Int>~nGlobal genericIntResult:SGenericAmount<Int>=genericIntAmount.AddTwice(genericIntOther)~nGlobal genericFloatAmount:SGenericAmount<Float>~nGlobal genericFloatOther:SGenericAmount<Float>~nGlobal genericFloatResult:SGenericAmount<Float>=genericFloatAmount.AddTwice(genericFloatOther)"
+Local genericStructOperatorCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-struct-operator.bmx", genericStructOperatorSource, Null, compilerOptions)
+Local genericStructOperatorDirectCalls:Int
+Local genericStructOperatorTemporaryReceivers:Int
+Local genericStructOperatorClassDispatch:Int
+For Local genericStructOperatorUnit:TCompilerGenericUnit = EachIn genericStructOperatorCompilation.genericPlan.units
+	If genericStructOperatorUnit.specialization.artifact.typeDeclarationKind <> GENERIC_TYPE_DECLARATION_STRUCT Then Continue
+	If genericStructOperatorUnit.implementation.Contains("(&(bmx_call_receiver_") Then genericStructOperatorDirectCalls :+ 1
+	If genericStructOperatorUnit.implementation.Contains("bmx_call_receiver_") Then genericStructOperatorTemporaryReceivers :+ 1
+	If genericStructOperatorUnit.implementation.Contains("->clas->") Then genericStructOperatorClassDispatch :+ 1
+Next
+Check(genericStructOperatorCompilation.Succeeded() And genericStructOperatorCompilation.genericPlan.units.length = 2, "generic Struct operators specialize independently for Int and Float receivers: " + CompilationSummary(genericStructOperatorCompilation))
+Check(genericStructOperatorDirectCalls = 2 And genericStructOperatorTemporaryReceivers = 2 And genericStructOperatorClassDispatch = 0, "generic Struct operator chains use addressable temporary receivers and direct pointer calls rather than object virtual dispatch")
 Local ordinaryStructOperatorBuildDiagnostics:TCompilerDiagnostic[]
 Local ordinaryStructOperatorBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(ordinaryStructOperatorCompilation, "ordinary-operator.c", "", "", ordinaryStructOperatorBuildDiagnostics)
 Local ordinaryStructOperatorHeader:TCompilerBuildOutputFile
@@ -3746,6 +3759,14 @@ Check(blockingStyleRuntimeDiagnostics.length = 0 And stringChooseSlot.length And
 
 Local registry:TGenericSpecializationRegistry = TGenericSpecializationRegistry.Create(Configuration())
 Local list1:TGenericSpecializationNode = registry.Request(artifact, [Builtin("String")], RequestSite("file1", GENERIC_REQUEST_TYPE_USE))
+Local ownClosedStructType:TTemplateTypeReference = New TTemplateTypeReference
+ownClosedStructType.kind = TEMPLATE_TYPE_NAMED
+ownClosedStructType.moduleName = list1.artifact.identity.moduleName
+ownClosedStructType.symbolName = list1.artifact.identity.qualifiedName
+ownClosedStructType.arguments = [Builtin("String")]
+ownClosedStructType.runtimeKind = TEMPLATE_RUNTIME_STRUCT
+ownClosedStructType.runtimeAbiName = list1.readableAbiName
+Check(TCompilerGenericCUnitEmitter.RuntimeTypeHeaderIncludesForSpecialization(ownClosedStructType, list1, New TMap) = "", "a specialization's own closed Struct receiver and result types do not invent an external module header")
 Local list2:TGenericSpecializationNode = registry.Request(artifact, [Builtin("String")], RequestSite("file2", GENERIC_REQUEST_ALLOCATION))
 Local list3:TGenericSpecializationNode = registry.Request(artifact, [Builtin("String")], RequestSite("file3", GENERIC_REQUEST_SIGNATURE))
 Check(list1 = list2 And list2 = list3, "independent requests intern one canonical specialization")
