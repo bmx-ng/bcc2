@@ -92,3 +92,12 @@ The `tests/run_*.sh` scripts provide runtime, module-boundary, incremental-build
 debugger, and generated-matrix coverage. They accept explicit SDK, compiler,
 build-manager, and output paths according to the needs of each test so that
 validation can run without modifying a production SDK.
+
+The numeric generic constraint matrix checks every admitted scalar type and
+supported operator across local and imported generic specializations, plus
+literal, typed-value, argument, assignment, return, and explicit-cast cases.
+Run its compiler, native-runtime, and real-module checks together with:
+
+```sh
+tests/run_numeric_generic_constraint_matrix_regression.sh /path/to/bmk /tmp/numeric-constraint-matrix
+```
