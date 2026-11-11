@@ -93,6 +93,13 @@ debugger, and generated-matrix coverage. They accept explicit SDK, compiler,
 build-manager, and output paths according to the needs of each test so that
 validation can run without modifying a production SDK.
 
+The embedded generic C syntax check compiles the emitted application and
+specialization units for managed Functions and Struct String literals:
+
+```sh
+tests/run_embedded_generic_c_syntax_regression.sh /path/to/bcc /path/to/sdk /tmp/embedded-generic-c
+```
+
 The numeric generic constraint matrix checks every admitted scalar type and
 supported operator across local and imported generic specializations, plus
 literal, typed-value, argument, assignment, return, and explicit-cast cases.
