@@ -35,6 +35,33 @@ Function AppendValue<T>:T(value:T Var, suffix:T)
 	Return value
 End Function
 
+Function MakeLabel:String()
+	Return "made"
+End Function
+
+Function LiteralPair<T>:String(value:T)
+	Return "left" + "right"
+End Function
+
+Function CallPair<T>:String(value:T)
+	Return MakeLabel() + MakeLabel()
+End Function
+
+Function NumericSuffix<T>:String(value:T)
+	Return "value" + 42
+End Function
+
+Function StablePair<T>:String(left:String, right:String, value:T)
+	Return left + right
+End Function
+
+Type TConcat<T>
+	Field value:T
+	Method Combine:String()
+		Return "type" + MakeLabel()
+	End Method
+End Type
+
 Local item:TItem = New TItem
 Local retained:TItem = Keep<TItem>(item)
 Local contract:IItem = item
@@ -49,3 +76,9 @@ Local words:String[] = ["one"]
 Local expandedWords:String[] = Expand<String>(words, "two")
 Local text:String = "first"
 Local result:String = AppendValue<String>(text, " second")
+Local literalPair:String = LiteralPair<Int>(1)
+Local callPair:String = CallPair<Int>(1)
+Local numericSuffix:String = NumericSuffix<Int>(1)
+Local stablePair:String = StablePair<Int>("a", "b", 1)
+Local concatType:TConcat<Int> = New TConcat<Int>
+Local typePair:String = concatType.Combine()

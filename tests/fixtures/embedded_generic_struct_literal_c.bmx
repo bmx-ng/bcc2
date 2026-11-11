@@ -44,12 +44,14 @@ Struct SLabel<T>
 	Field called:String = MakeLabel()
 	Field wrapped:String = WrapLabel("field")
 	Field paired:String = JoinLabels("first", "second")
+	Field literalPair:String = "field"
 	Method New()
 		label = "made"
 		called = MakeLabel()
 		wrapped = WrapLabel(label)
 		wrapped = JoinLabels(label, wrapped)
 		paired = JoinLabels(MakeLabel(), paired)
+		literalPair = MakeLabel() + MakeLabel()
 	End Method
 	Method Label:String()
 		Return label + "!"
@@ -75,6 +77,12 @@ Struct SLabel<T>
 	Method Nested:String()
 		Return JoinLabels(JoinLabels("a", "b"), JoinLabels("c", "d"))
 	End Method
+	Method NestedConcat:String()
+		Return (label + "!") + (paired + "?")
+	End Method
+	Method SequencedConcat:String()
+		Return JoinLabels("a", "b") + JoinLabels("c", "d")
+	End Method
 	Method Exchange:String()
 		Return ExchangeLabels(label, wrapped)
 	End Method
@@ -97,6 +105,8 @@ If total <> 11 Then value = "unexpected"
 Local combined:String = label.Combined()
 Local sequenced:String = label.Sequenced()
 Local nested:String = label.Nested()
+Local nestedConcat:String = label.NestedConcat()
+Local sequencedConcat:String = label.SequencedConcat()
 Local exchanged:String = label.Exchange()
 Local mixed:String = label.Mixed()
 label.Touch()
