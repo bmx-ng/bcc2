@@ -48,6 +48,14 @@ Function Compact:String(text:String)
 	Return text.Replace(" ", "").Replace("~t", "").Replace("~r", "").Replace("~n", "")
 End Function
 
+Function CInitializerSection:String(text:String, marker:String)
+	Local first:Int = text.Find(marker)
+	If first < 0 Then Return ""
+	Local last:Int = text.Find("};", first)
+	If last < 0 Then Return ""
+	Return text[first..last + 2]
+End Function
+
 Function CFunctionSection:String(text:String, signature:String)
 	Local signatureStart:Int
 	Local bodyStart:Int
@@ -341,6 +349,7 @@ noRuntimeOptions.threaded = False
 noRuntimeOptions.implicitRuntime = False
 noRuntimeOptions.RefreshConditionalSymbols()
 noRuntimeResolver.AddInterface("pico.contracts", "sdk/pico.contracts.i", "superstrict~nIReading^Object{~n-Read%(value%)A=~qpico_contracts_IReading_Read__Bint~q~n}AI=~qpico_contracts_IReading~q~nILabelled^IReading{~n-Label$()A=~qpico_contracts_ILabelled_Label~q~n}AI=~qpico_contracts_ILabelled~q")
+noRuntimeResolver.AddInterface("pico.mutablecontracts", "sdk/pico.mutablecontracts.i", "superstrict~nICounter^Object{~n-Bump%(value% Var)A=~qpico_mutablecontracts_ICounter_Bump__Vint~q~n}AI=~qpico_mutablecontracts_ICounter~q")
 noRuntimeResolver.AddInterface("pico.incompletecontracts", "sdk/pico.incompletecontracts.i", "superstrict~nIIncomplete^Object{~n-Read%()A~n}AI")
 noRuntimeResolver.AddInterface("pico.types", "sdk/pico.types.i", "superstrict~nIStable^Object{~n-Stable%()A=~qpico_types_IStable_Stable~q~n}AI=~qpico_types_IStable~q~nTImportedReading^Object@IStable{~n.value%&~n.label$&~n-New(initial%)=~qpico_types_TImportedReading_New__Bint~q~n-Read%(value%)=~qpico_types_TImportedReading_Read__Bint~q~n-Stable%()=~qpico_types_TImportedReading_Stable~q~n-Delete()=~qpico_types_TImportedReading_Delete~q~n}=~qpico_types_TImportedReading~q~nCreateImportedReading:TImportedReading()=~qpico_types_CreateImportedReading~q")
 noRuntimeResolver.AddInterface("pico.typefunctions", "sdk/pico.typefunctions.i", "superstrict~nTFactoryBase^Object{~n+Find:TFactoryBase(name$)=~qpico_typefunctions_TFactoryBase_Find__Bstring~q~n-Name$()A=~qpico_typefunctions_TFactoryBase_Name~q~n}A=~qpico_typefunctions_TFactoryBase~q")
@@ -688,6 +697,105 @@ Next
 Check(picoGenericContainer.Succeeded() And picoGenericContainerDiagnostics.length = 0 And picoGenericContainerBuild.linkInputs.length = 2, "Pico plans canonical generic Type and Interface specializations as separate reusable units")
 Check(picoGenericContainerUnits.Contains("BMXEmbeddedInterfaceDescriptor") And picoGenericContainerUnits.Contains("BMXEmbeddedInterfaceEntry") And picoGenericContainerUnits.Contains("bmx_embedded_array_new_1d") And picoGenericContainerUnits.Contains("bmx_embedded_array_element") And picoGenericContainerUnits.Contains("bmx_embedded_array_slice"), "Pico generic containers publish interface metadata and lower managed Array allocation, access and slicing through the embedded ABI")
 Check(picoGenericContainerApplication And picoGenericContainerApplication.content.Contains("bmx_embedded_interface_methods("), "Pico application consumers dispatch imported canonical generic Interfaces through embedded descriptors")
+Local picoGenericImportedInterfaceSource:String = "SuperStrict~nImport pico.contracts~nType TGenericReading<T> Implements ILabelled~nField value:T~nMethod Read:Int(value:Int)~nReturn value+1~nEnd Method~nMethod Label:String()~nReturn ~qreading~q~nEnd Method~nEnd Type~nLocal concrete:TGenericReading<Int>=New TGenericReading<Int>~nLocal labelled:ILabelled=concrete~nLocal reading:IReading=IReading(labelled)~nLocal result:Int=reading.Read(41)~nLocal text:String=labelled.Label()"
+Local picoGenericImportedInterface:TCompilerResult = TBlitzMaxCompiler.Compile("pico-generic-imported-interface.bmx", picoGenericImportedInterfaceSource, noRuntimeResolver, noRuntimeOptions)
+Local picoGenericImportedInterfaceDiagnostics:TCompilerDiagnostic[]
+Local picoGenericImportedInterfaceBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(picoGenericImportedInterface, "application.c", "", "", picoGenericImportedInterfaceDiagnostics)
+Local picoGenericImportedInterfaceUnit:TCompilerBuildOutputFile
+Local picoGenericImportedInterfaceApplication:TCompilerBuildOutputFile
+For Local file:TCompilerBuildOutputFile = EachIn picoGenericImportedInterfaceBuild.files
+	If file.role = "generic-specialization-c" Then picoGenericImportedInterfaceUnit = file
+	If file.role = "application-c" Then picoGenericImportedInterfaceApplication = file
+Next
+Check(picoGenericImportedInterface.Succeeded() And picoGenericImportedInterfaceDiagnostics.length = 0 And picoGenericImportedInterfaceUnit, "Pico accepts a generic Type implementing an imported Interface hierarchy: " + CompilerDiagnosticSummary(picoGenericImportedInterface) + "; emission: " + EmissionDiagnosticSummary(picoGenericImportedInterfaceDiagnostics))
+Check(picoGenericImportedInterfaceUnit And picoGenericImportedInterfaceUnit.content.Contains("BMXEmbeddedInterfaceDescriptor pico_contracts_ILabelled_ifc") And picoGenericImportedInterfaceUnit.content.Contains("BMXEmbeddedInterfaceDescriptor pico_contracts_IReading_ifc") And picoGenericImportedInterfaceUnit.content.Contains(".interface_count = 2") And picoGenericImportedInterfaceUnit.content.Contains("(BMXEmbeddedMethod)") And picoGenericImportedInterfaceApplication And picoGenericImportedInterfaceApplication.content.Contains("bmx_embedded_interface_methods((void *)"), "Pico generic Type units publish imported and inherited Interface descriptors and dispatch slots")
+Check(picoGenericImportedInterfaceUnit And picoGenericImportedInterfaceUnit.content.Contains("_interfaces_0[2] = {") And picoGenericImportedInterfaceUnit.content.Contains("_interfaces_1[1] = {") And picoGenericImportedInterfaceUnit.content.Contains("_ifc, ") And picoGenericImportedInterfaceUnit.content.Contains(", 2 },") And picoGenericImportedInterfaceUnit.content.Contains(", 1 },"), "Pico inherited imported Interface tables retain the flattened child slots and the parent's own slot count")
+Local picoGenericImportedChildSlots:String
+Local picoGenericImportedParentSlots:String
+If picoGenericImportedInterfaceUnit Then
+	picoGenericImportedChildSlots = CInitializerSection(picoGenericImportedInterfaceUnit.content, "_interfaces_0[2] = {")
+	picoGenericImportedParentSlots = CInitializerSection(picoGenericImportedInterfaceUnit.content, "_interfaces_1[1] = {")
+End If
+Check(AppearsBefore(picoGenericImportedChildSlots, "_Read,", "_Label,") And picoGenericImportedParentSlots.Contains("_Read,") And Not picoGenericImportedParentSlots.Contains("_Label,"), "Pico imported Interface tables keep the published inherited method order")
+Local picoGenericImportedVariantsSource:String = "SuperStrict~nImport pico.contracts~nType TReading<T> Implements ILabelled~nField item:T~nMethod New(value:T)~nitem=value~nEnd Method~nMethod Read:Int(value:Int)~nReturn value+1~nEnd Method~nMethod Label:String()~nReturn ~qreading~q~nEnd Method~nEnd Type~nLocal first:ILabelled=New TReading<Int>(41)~nLocal second:ILabelled=New TReading<String>(~qtext~q)~nLocal firstBase:IReading=IReading(first)~nLocal secondBase:IReading=IReading(second)~nLocal result:Int=firstBase.Read(1)+secondBase.Read(2)~nLocal labels:String=first.Label()+second.Label()"
+Local picoGenericImportedVariants:TCompilerResult = TBlitzMaxCompiler.Compile("pico-generic-imported-variants.bmx", picoGenericImportedVariantsSource, noRuntimeResolver, noRuntimeOptions)
+Local picoGenericImportedVariantsDiagnostics:TCompilerDiagnostic[]
+Local picoGenericImportedVariantsBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(picoGenericImportedVariants, "application.c", "", "", picoGenericImportedVariantsDiagnostics)
+Local picoGenericImportedVariantCount:Int
+For Local file:TCompilerBuildOutputFile = EachIn picoGenericImportedVariantsBuild.files
+	If file.role <> "generic-specialization-c" Then Continue
+	picoGenericImportedVariantCount :+ 1
+	Check(file.content.Contains(".interface_count = 2") And file.content.Contains("_interfaces_0[2] = {") And file.content.Contains("_interfaces_1[1] = {"), "each closed Pico generic Type retains both imported Interface tables")
+Next
+Check(picoGenericImportedVariants.Succeeded() And picoGenericImportedVariantsDiagnostics.length = 0 And picoGenericImportedVariantCount = 2 And picoGenericImportedVariantsBuild.linkInputs.length = 2, "distinct Pico generic Type arguments produce separate Interface-bearing units: " + CompilerDiagnosticSummary(picoGenericImportedVariants) + "; emission: " + EmissionDiagnosticSummary(picoGenericImportedVariantsDiagnostics))
+Local picoGenericImportedVarSource:String = "SuperStrict~nImport pico.mutablecontracts~nType TCounter<T> Implements ICounter~nField item:T~nMethod Bump:Int(value:Int Var)~nvalue:+1~nReturn value~nEnd Method~nEnd Type~nLocal first:ICounter=New TCounter<Int>~nLocal second:ICounter=New TCounter<String>~nLocal count:Int=40~nLocal result:Int=first.Bump(count)+second.Bump(count)"
+Local picoGenericImportedVar:TCompilerResult = TBlitzMaxCompiler.Compile("pico-generic-imported-var.bmx", picoGenericImportedVarSource, noRuntimeResolver, noRuntimeOptions)
+Local picoGenericImportedVarDiagnostics:TCompilerDiagnostic[]
+Local picoGenericImportedVarBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(picoGenericImportedVar, "application.c", "", "", picoGenericImportedVarDiagnostics)
+Local picoGenericImportedVarCount:Int
+Local picoGenericImportedVarApplication:TCompilerBuildOutputFile
+For Local file:TCompilerBuildOutputFile = EachIn picoGenericImportedVarBuild.files
+	If file.role = "generic-specialization-c" Then
+		picoGenericImportedVarCount :+ 1
+		Check(file.content.Contains("pico_mutablecontracts_ICounter_ifc") And CInitializerSection(file.content, "_interfaces_0[1] = {").Contains("_Bump,") And file.content.Contains("int32_t *"), "each closed Pico generic Type preserves the imported Var slot and its pointer ABI")
+	Else If file.role = "application-c" Then
+		picoGenericImportedVarApplication = file
+	End If
+Next
+Check(picoGenericImportedVar.Succeeded() And picoGenericImportedVarDiagnostics.length = 0 And picoGenericImportedVarCount = 2 And picoGenericImportedVarApplication And Occurrences(picoGenericImportedVarApplication.content, "bmx_embedded_interface_methods((void *)") = 2, "Pico imported Interface Var calls dispatch through both generic specializations: " + CompilerDiagnosticSummary(picoGenericImportedVar) + "; emission: " + EmissionDiagnosticSummary(picoGenericImportedVarDiagnostics))
+Local picoGenericImportedDerivedSource:String = "SuperStrict~nImport pico.contracts~nType TReadingBase<T> Implements ILabelled~nMethod Read:Int(value:Int)~nReturn value+1~nEnd Method~nMethod Label:String()~nReturn ~qbase~q~nEnd Method~nEnd Type~nType TReadingDerived<T> Extends TReadingBase<T>~nMethod Read:Int(value:Int) Override~nReturn value+2~nEnd Method~nMethod Label:String() Override~nReturn ~qderived~q~nEnd Method~nEnd Type~nLocal concrete:TReadingDerived<Int>=New TReadingDerived<Int>~nLocal child:ILabelled=concrete~nLocal parent:IReading=IReading(child)~nLocal result:Int=parent.Read(40)~nLocal label:String=child.Label()"
+Local picoGenericImportedDerived:TCompilerResult = TBlitzMaxCompiler.Compile("pico-generic-imported-derived.bmx", picoGenericImportedDerivedSource, noRuntimeResolver, noRuntimeOptions)
+Local picoGenericImportedDerivedDiagnostics:TCompilerDiagnostic[]
+Local picoGenericImportedDerivedBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(picoGenericImportedDerived, "application.c", "", "", picoGenericImportedDerivedDiagnostics)
+Local picoGenericImportedDerivedUnits:String
+Local picoGenericImportedDerivedUnit:TCompilerBuildOutputFile
+Local picoGenericImportedDerivedApplication:TCompilerBuildOutputFile
+For Local file:TCompilerBuildOutputFile = EachIn picoGenericImportedDerivedBuild.files
+	If file.role = "generic-specialization-c" Then
+		picoGenericImportedDerivedUnits :+ file.content
+		If file.content.Contains(".name = ~qTReadingDerived<int>~q") Then picoGenericImportedDerivedUnit = file
+	End If
+	If file.role = "application-c" Then picoGenericImportedDerivedApplication = file
+Next
+Check(picoGenericImportedDerived.Succeeded() And picoGenericImportedDerivedDiagnostics.length = 0 And picoGenericImportedDerivedBuild.linkInputs.length = 2 And picoGenericImportedDerivedUnits.Contains(".super = &bmx_gen_") And picoGenericImportedDerivedUnits.Contains(".interface_count = 2") And picoGenericImportedDerivedApplication And Occurrences(picoGenericImportedDerivedApplication.content, "bmx_embedded_interface_methods((void *)") = 2, "Pico generic subclasses preserve imported Interface casts and dispatch through the inherited descriptor hierarchy: " + CompilerDiagnosticSummary(picoGenericImportedDerived) + "; emission: " + EmissionDiagnosticSummary(picoGenericImportedDerivedDiagnostics))
+Local picoGenericImportedDerivedChildSlots:String
+Local picoGenericImportedDerivedParentSlots:String
+If picoGenericImportedDerivedUnit Then
+	picoGenericImportedDerivedChildSlots = CInitializerSection(picoGenericImportedDerivedUnit.content, "_interfaces_0[2] = {")
+	picoGenericImportedDerivedParentSlots = CInitializerSection(picoGenericImportedDerivedUnit.content, "_interfaces_1[1] = {")
+End If
+Check(picoGenericImportedDerivedUnit And picoGenericImportedDerivedUnit.content.Contains(".interface_count = 2") And Occurrences(picoGenericImportedDerivedChildSlots, "_TReadingDerived_int_") = 2 And AppearsBefore(picoGenericImportedDerivedChildSlots, "_Read,", "_Label,") And Occurrences(picoGenericImportedDerivedParentSlots, "_TReadingDerived_int_") = 1 And picoGenericImportedDerivedParentSlots.Contains("_Read,"), "Pico generic subclasses replace inherited Interface slots with their overrides")
+Local esp32GenericImportedOptions:TCompilerOptions = TestOptions()
+esp32GenericImportedOptions.targetPlatform = "esp32"
+esp32GenericImportedOptions.targetArchitecture = "riscv32"
+esp32GenericImportedOptions.threaded = False
+esp32GenericImportedOptions.implicitRuntime = False
+esp32GenericImportedOptions.RefreshConditionalSymbols()
+Local esp32GenericImportedDerived:TCompilerResult = TBlitzMaxCompiler.Compile("esp32-generic-imported-derived.bmx", picoGenericImportedDerivedSource, noRuntimeResolver, esp32GenericImportedOptions)
+Local esp32GenericImportedDerivedDiagnostics:TCompilerDiagnostic[]
+Local esp32GenericImportedDerivedBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(esp32GenericImportedDerived, "application.c", "", "", esp32GenericImportedDerivedDiagnostics)
+Local esp32GenericImportedDerivedUnit:TCompilerBuildOutputFile
+For Local file:TCompilerBuildOutputFile = EachIn esp32GenericImportedDerivedBuild.files
+	If file.role = "generic-specialization-c" And file.content.Contains(".name = ~qTReadingDerived<int>~q") Then esp32GenericImportedDerivedUnit = file
+Next
+Local esp32GenericImportedDerivedSlots:String
+If esp32GenericImportedDerivedUnit Then esp32GenericImportedDerivedSlots = CInitializerSection(esp32GenericImportedDerivedUnit.content, "_interfaces_0[2] = {")
+Check(esp32GenericImportedDerived.Succeeded() And esp32GenericImportedDerivedDiagnostics.length = 0 And esp32GenericImportedDerivedBuild.linkInputs.length = 2 And esp32GenericImportedDerivedUnit And esp32GenericImportedDerivedUnit.content.Contains(".interface_count = 2") And Occurrences(esp32GenericImportedDerivedSlots, "_TReadingDerived_int_") = 2, "ESP32/RISC-V generic subclasses publish their imported Interface overrides: " + CompilerDiagnosticSummary(esp32GenericImportedDerived) + "; emission: " + EmissionDiagnosticSummary(esp32GenericImportedDerivedDiagnostics))
+Local picoGenericImportedSelectiveSource:String = "SuperStrict~nImport pico.contracts~nType TReadingBase<T> Implements ILabelled~nMethod Read:Int(value:Int)~nReturn value+1~nEnd Method~nMethod Label:String()~nReturn ~qbase~q~nEnd Method~nEnd Type~nType TUnchanged<T> Extends TReadingBase<T>~nEnd Type~nType TLabelOnly<T> Extends TReadingBase<T>~nMethod Label:String() Override~nReturn ~qderived~q~nEnd Method~nEnd Type~nLocal unchanged:ILabelled=New TUnchanged<Int>~nLocal changed:ILabelled=New TLabelOnly<Int>~nLocal first:Int=IReading(unchanged).Read(1)~nLocal second:Int=IReading(changed).Read(2)~nLocal labels:String=unchanged.Label()+changed.Label()"
+Local picoGenericImportedSelective:TCompilerResult = TBlitzMaxCompiler.Compile("pico-generic-imported-selective.bmx", picoGenericImportedSelectiveSource, noRuntimeResolver, noRuntimeOptions)
+Local picoGenericImportedSelectiveDiagnostics:TCompilerDiagnostic[]
+Local picoGenericImportedSelectiveBuild:TCompilerBuildOutputPlan = TBlitzMaxCompiler.PlanBuildOutputs(picoGenericImportedSelective, "application.c", "", "", picoGenericImportedSelectiveDiagnostics)
+Local picoGenericImportedUnchangedUnit:TCompilerBuildOutputFile
+Local picoGenericImportedLabelUnit:TCompilerBuildOutputFile
+For Local file:TCompilerBuildOutputFile = EachIn picoGenericImportedSelectiveBuild.files
+	If file.role <> "generic-specialization-c" Then Continue
+	If file.content.Contains(".name = ~qTUnchanged<int>~q") Then picoGenericImportedUnchangedUnit = file
+	If file.content.Contains(".name = ~qTLabelOnly<int>~q") Then picoGenericImportedLabelUnit = file
+Next
+Local picoGenericImportedLabelSlots:String
+If picoGenericImportedLabelUnit Then picoGenericImportedLabelSlots = CInitializerSection(picoGenericImportedLabelUnit.content, "_interfaces_0[2] = {")
+Check(picoGenericImportedSelective.Succeeded() And picoGenericImportedSelectiveDiagnostics.length = 0 And picoGenericImportedSelectiveBuild.linkInputs.length = 3 And picoGenericImportedUnchangedUnit And picoGenericImportedLabelUnit, "Pico plans inherited imported Interfaces for unchanged and selectively overridden generic subclasses: " + CompilerDiagnosticSummary(picoGenericImportedSelective) + "; emission: " + EmissionDiagnosticSummary(picoGenericImportedSelectiveDiagnostics))
+Check(picoGenericImportedUnchangedUnit And picoGenericImportedUnchangedUnit.content.Contains(".interfaces = 0, .interface_count = 0") And picoGenericImportedLabelUnit And picoGenericImportedLabelUnit.content.Contains(".interface_count = 1") And picoGenericImportedLabelSlots.Contains("_TReadingBase_int_") And picoGenericImportedLabelSlots.Contains("_Read,") And picoGenericImportedLabelSlots.Contains("_TLabelOnly_int_") And picoGenericImportedLabelSlots.Contains("_Label,") And Not picoGenericImportedLabelUnit.content.Contains("_interfaces_1[1] = {"), "Pico emits only the imported Interface tables changed by a generic subclass override")
 Local picoNestedGenericContainerSource:String = "SuperStrict~nInterface IEquality<T>~nMethod Equal:Int(left:T,right:T)~nEnd Interface~nType TFailure~nEnd Type~nType TKey<T>~nField value:T~nMethod Cast:TKey<T>(other:Object)~nReturn TKey<T>(other)~nEnd Method~nEnd Type~nType TBucket<T>~nField keys:T[]~nField equality:IEquality<T>~nMethod New()~nkeys=New T[1]~nEnd Method~nMethod Failure:TFailure()~nReturn New TFailure~nEnd Method~nEnd Type~nGlobal bucket:TBucket<TKey<Int>>=New TBucket<TKey<Int>>~nGlobal key:TKey<Int>=New TKey<Int>~nGlobal castKey:TKey<Int>=key.Cast(key)~nGlobal failure:TFailure=bucket.Failure()"
 Local picoNestedGenericContainer:TCompilerResult = TBlitzMaxCompiler.Compile("pico-nested-generic-container.bmx", picoNestedGenericContainerSource, noRuntimeResolver, noRuntimeOptions)
 Local picoNestedGenericContainerDiagnostics:TCompilerDiagnostic[]

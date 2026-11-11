@@ -27,7 +27,7 @@ The typed IR has more operation kinds than the 30 template node kinds because te
 
 Remaining deliberate limits and gaps:
 
-* Desktop generic Types emit ordinary Interface tables from published slot signatures, including inherited Interfaces and Var parameters. Embedded generic Type specialization still rejects ordinary imported Interfaces.
+* Desktop and embedded generic Types emit ordinary Interface tables from published slot signatures, including inherited Interfaces. The embedded path uses compact descriptors and accepts value and Var parameters whose closed types have embedded ABI support. A generic subclass publishes replacement embedded tables for the inherited Interfaces whose methods it overrides; unchanged Interfaces continue to use their base Type's tables.
 * Reading an ordinary Type field while forming a computed Method reference uses a stable getter emitted by the Type's owning source unit. This supports call chains, direct field reads and managed Array indexes across Include, quoted import and compiled-module boundaries. A field owned by an already imported ordinary Type has no published getter contract in its compact interface, so the builder diagnoses that case. Other generic field operations still need the Type's full layout or a dedicated accessor path.
 * Range slicing calls the start and end bound resolvers with the same Range value. The builder requires stable expressions so neither the Range nor receiver gains extra side effects.
 * Embedded specialization admits narrower value and operation sets, including no raw pointer ABI in the generic Type/routine baseline. Those guards remain separate from desktop support.
