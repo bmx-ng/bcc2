@@ -928,7 +928,7 @@ Local managedArraySliceCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("
 Check(managedArraySliceCompilation.Succeeded() And managedArraySliceCompilation.genericPlan.units.length = 1, "generic managed Array slicing survives source-free specialization: " + CompilationSummary(managedArraySliceCompilation))
 Local managedArraySliceImplementation:String = managedArraySliceCompilation.genericPlan.units[0].implementation
 Check(managedArraySliceImplementation.Contains("BBARRAY bmx_local_selected = bbArraySlice(~q$~q, bmx_local_data, 1, (bmx_local_data->scales[0]));") And managedArraySliceImplementation.Contains("return ((BBSTRING*)BBARRAYDATA(bmx_local_selected, 1))[0];"), "closed String Array slicing lowers through the established runtime ABI with normalized omitted bounds")
-Local genericStringCoreInterface:String = "superstrict~nObject^Null{~n}=~qbbObjectClass~q~nString^Object{~n-Find:Int(subString:String,startIndex=0)=~qbbStringFind~q~n-Split:String[](separator:String)=~qbbStringSplit~q~n}=~qbbStringClass~q"
+Local genericStringCoreInterface:String = "superstrict~nObject^Null{~n}=~qbbObjectClass~q~nString^Object{~n-Find:Int(subString:String,startIndex=0)=~qbbStringFind~q~n-Split:String[](separator:String)=~qbbStringSplit~q~n}=~qbbStringClass~q~n___Array^Object{~n-Sort(ascending=1)=~qbbArraySort~q~n-Dimensions:Int[]()=~qbbArrayDimensions~q~n}AF=~qbbArrayClass~q"
 Local genericStringCoreResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
 genericStringCoreResolver.SetCoreInterface("sdk/brl.blitz.i", genericStringCoreInterface)
 genericStringCoreResolver.AddInterface("brl.blitz", "sdk/mod/brl.mod/blitz.mod/blitz.i", "superstrict")
@@ -956,6 +956,30 @@ Local genericStringImportedImplementation:String
 If genericStringConsumer.genericPlan And genericStringConsumer.genericPlan.units.length Then genericStringImportedImplementation = genericStringConsumer.genericPlan.units[0].implementation
 Check(genericStringModule.Succeeded() And genericStringArtifactDiagnostics.length = 0 And genericStringInterfaceDiagnostics.length = 0 And genericStringOutputs.length = 1 And genericStringConsumer.Succeeded(), "generic String operations round-trip through a source-free module template: " + CompilationSummary(genericStringConsumer))
 Check(genericStringImportedImplementation.Contains("bbStringSlice(") And genericStringImportedImplementation.Contains("bbStringFind(") And genericStringImportedImplementation.Contains("bbStringSplit("), "imported generic String operations retain slice and runtime-method linkage metadata")
+Local genericArrayOperationsSource:String = "SuperStrict~nFunction ArrayOperations<T>:Int[](values:T[],ascending:Int=True)~nvalues.Sort(ascending)~nReturn values.Dimensions()~nEnd Function~nGlobal arrayValues:String[]=[~qb~q,~qa~q]~nGlobal arrayDimensions:Int[]=ArrayOperations<String>(arrayValues)"
+Local genericArrayOperationsCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-array-runtime-operations.bmx", genericArrayOperationsSource, genericStringCoreResolver, compilerOptions)
+Local genericArrayOperationsImplementation:String
+If genericArrayOperationsCompilation.genericPlan And genericArrayOperationsCompilation.genericPlan.units.length Then genericArrayOperationsImplementation = genericArrayOperationsCompilation.genericPlan.units[0].implementation
+Check(genericArrayOperationsCompilation.Succeeded() And genericArrayOperationsCompilation.genericPlan.units.length = 1, "generic built-in Array methods survive canonical specialization: " + CompilationSummary(genericArrayOperationsCompilation))
+Check(genericArrayOperationsImplementation.Contains("bbArraySort(") And genericArrayOperationsImplementation.Contains("bbArrayDimensions("), "generic Array Sort and Dimensions lower through their stable desktop runtime ABIs")
+Local genericArrayModuleSource:String = "SuperStrict~nModule Acme.GenericArrayOperations~nFunction ImportedArrayOperations<T>:Int[](values:T[])~nvalues.Sort()~nReturn values.Dimensions()~nEnd Function"
+Local genericArrayModule:TCompilerResult = TBlitzMaxCompiler.Compile("sdk/mod/acme.mod/genericarrayoperations.mod/genericarrayoperations.bmx", genericArrayModuleSource, genericStringCoreResolver, compilerOptions)
+Local genericArrayArtifactDiagnostics:TCompilerDiagnostic[]
+Local genericArrayOutputs:TCompilerGenericTemplateOutput[] = TBlitzMaxCompiler.EmitGenericTemplateArtifacts(genericArrayModule, genericArrayArtifactDiagnostics)
+Local genericArrayInterfaceDiagnostics:TCompilerDiagnostic[]
+Local genericArrayInterface:String = TBlitzMaxCompiler.EmitInterface(genericArrayModule, genericArrayInterfaceDiagnostics)
+Local genericArrayResolver:TGenericSnapshotResolver = New TGenericSnapshotResolver
+genericArrayResolver.SetCoreInterface("sdk/brl.blitz.i", genericStringCoreInterface)
+genericArrayResolver.AddInterface("brl.blitz", "sdk/mod/brl.mod/blitz.mod/blitz.i", "superstrict")
+genericArrayResolver.AddInterface("acme.genericarrayoperations", "sdk/acme.genericarrayoperations.i", genericArrayInterface)
+For Local genericArrayOutput:TCompilerGenericTemplateOutput = EachIn genericArrayOutputs
+	genericArrayResolver.AddGenericTemplate(genericArrayOutput.artifactReference, "sdk/" + genericArrayOutput.artifactReference, genericArrayOutput.content)
+Next
+Local genericArrayConsumer:TCompilerResult = TBlitzMaxCompiler.Compile("generic-imported-array-operations.bmx", "SuperStrict~nImport Acme.GenericArrayOperations~nGlobal importedValues:Int[]=[2,1]~nGlobal importedDimensions:Int[]=ImportedArrayOperations<Int>(importedValues)", genericArrayResolver, compilerOptions)
+Local genericArrayImportedImplementation:String
+If genericArrayConsumer.genericPlan And genericArrayConsumer.genericPlan.units.length Then genericArrayImportedImplementation = genericArrayConsumer.genericPlan.units[0].implementation
+Check(genericArrayModule.Succeeded() And genericArrayArtifactDiagnostics.length = 0 And genericArrayInterfaceDiagnostics.length = 0 And genericArrayOutputs.length = 1 And genericArrayConsumer.Succeeded(), "generic Array runtime methods round-trip through a source-free module template: " + CompilationSummary(genericArrayConsumer))
+Check(genericArrayImportedImplementation.Contains("bbArraySort(") And genericArrayImportedImplementation.Contains("bbArrayDimensions("), "imported generic Array operations retain stable runtime-method linkage metadata")
 compilerOptions.requireCoreInterface = False
 Local multidimensionalGenericArraySource:String = "SuperStrict~nFunction MatrixRoundTrip<T>:T(value:T)~nLocal matrix:T[,] = New T[2,3]~nmatrix[1,2] = value~nFor Local item:T = EachIn matrix~nIf item = value Then Return matrix[1,2]~nNext~nEnd Function~nGlobal matrixText:String = MatrixRoundTrip<String>(~qmatrix~q)"
 Local multidimensionalGenericArrayCompilation:TCompilerResult = TBlitzMaxCompiler.Compile("generic-multidimensional-array.bmx", multidimensionalGenericArraySource, Null, compilerOptions)

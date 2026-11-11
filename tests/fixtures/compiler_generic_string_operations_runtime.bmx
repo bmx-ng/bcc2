@@ -43,7 +43,12 @@ Function SliceGenerated<T>:String()
 	Return GeneratedText()[1..]
 End Function
 
+Function RoundTripNumber<T>:Int(value:Int)
+	Local text:String = String.FromInt(value)
+	Return text.ToInt()
+End Function
+
 Local loaded:TResult = Load<TResult>("root?one&two#tail")
 If Not loaded Then Throw "generic construction failed"
 Local middle:String = SliceGenerated<Object>()
-Print observedPath + "|" + observedAnchor + "|" + observedArgumentCount + "|" + observedFirst + "|" + middle + "|" + generatedCalls
+Print observedPath + "|" + observedAnchor + "|" + observedArgumentCount + "|" + observedFirst + "|" + middle + "|" + generatedCalls + "|" + RoundTripNumber<Object>(42)
