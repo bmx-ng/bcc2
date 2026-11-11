@@ -100,6 +100,8 @@ specialization units for managed Functions, Struct String literals, and ordinary
 tests/run_embedded_generic_c_syntax_regression.sh /path/to/bcc /path/to/sdk /tmp/embedded-generic-c
 ```
 
+Use a fresh output directory for each run so old generated units cannot affect the check.
+
 The numeric generic constraint matrix checks every admitted scalar type and
 supported operator across local and imported generic specializations, plus
 literal, typed-value, argument, assignment, return, and explicit-cast cases.

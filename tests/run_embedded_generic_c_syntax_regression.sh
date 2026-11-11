@@ -12,6 +12,11 @@ sdk_root=$2
 output_root=$3
 fixture_root=$(CDPATH= cd -- "$(dirname -- "$0")/fixtures" && pwd)
 
+if test -e "$output_root"
+then
+	echo "output root already exists: $output_root" >&2
+	exit 2
+fi
 mkdir -p "$output_root"
 for case_name in embedded_generic_managed_c embedded_generic_struct_literal_c
 do
