@@ -44,6 +44,7 @@ run_configuration()
 	build_and_run "initialization-$configuration" generic_initialization_ordering.bmx "bcc2 generic initialization ordering ok" "$@"
 	build_and_run "threaded-global-$configuration" generic_threaded_global_runtime.bmx "bcc2 generic ThreadedGlobal runtime ok" "$@"
 	build_and_run "string-operations-$configuration" compiler_generic_string_operations_runtime.bmx "root|tail|2|114|alue|1" "$@"
+	build_and_run "pointer-index-$configuration" compiler_generic_pointer_index_runtime.bmx generic-pointer-index-ok "$@"
 	build_and_run "linkedlist-$configuration" linkedlist_pilot.bmx "linkedlist-pilot-ok" "$@"
 }
 

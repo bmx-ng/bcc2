@@ -10,7 +10,7 @@ fi
 bmk_dir=$(CDPATH= cd -- "$(dirname -- "$1")" && pwd)
 bmk="$bmk_dir/$(basename -- "$1")"
 compiler="$bmk_dir/bcc"
-if test -f "$bmk_dir/bcc.exe"
+if test -x "$bmk_dir/bcc.exe"
 then
 	compiler="$bmk_dir/bcc.exe"
 fi

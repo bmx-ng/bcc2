@@ -62,10 +62,21 @@ Type TBoundBox<T>
 	Method BoundJoin:Closure<T(value:T)>()
 		Return Join
 	End Method
+
+End Type
+
+Type TGenericMethodOwner
+	Method Identity<U>:U(value:U)
+		Return value
+	End Method
 End Type
 
 Function BindBox<T>:Closure<T(value:T)>(box:TBoundBox<T>)
 	Return box.Join
+End Function
+
+Function BindGenericMethod<T>:Closure<T(value:T)>(box:TGenericMethodOwner)
+	Return box.Identity<T>
 End Function
 
 Function MakeReceiver:TBoundBase()
@@ -130,6 +141,9 @@ Local genericJoin:Closure<String(value:String)> = BindBox<String>(box)
 If genericJoin("generic-routine") <> "generic-routine-bound" Then Throw "bound Method reference inside a generic routine failed"
 Local genericSelfJoin:Closure<String(value:String)> = box.BoundJoin()
 If genericSelfJoin("generic-self") <> "generic-self-bound" Then Throw "implicit Self bound Method reference inside a generic Type failed"
+Local genericOwner:TGenericMethodOwner = New TGenericMethodOwner
+Local genericMethod:Closure<String(value:String)> = BindGenericMethod<String>(genericOwner)
+If genericMethod("generic-method") <> "generic-method" Then Throw "specialized generic Method reference inside a generic routine failed"
 
 Local caught:String
 Local fail:Closure<Int(value:Int)> = concrete.Fail
