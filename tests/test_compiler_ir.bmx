@@ -353,7 +353,7 @@ noRuntimeResolver.AddInterface("pico.mutablecontracts", "sdk/pico.mutablecontrac
 noRuntimeResolver.AddInterface("pico.incompletecontracts", "sdk/pico.incompletecontracts.i", "superstrict~nIIncomplete^Object{~n-Read%()A~n}AI")
 noRuntimeResolver.AddInterface("pico.types", "sdk/pico.types.i", "superstrict~nIStable^Object{~n-Stable%()A=~qpico_types_IStable_Stable~q~n}AI=~qpico_types_IStable~q~nTImportedReading^Object@IStable{~n.value%&~n.label$&~n-New(initial%)=~qpico_types_TImportedReading_New__Bint~q~n-Read%(value%)=~qpico_types_TImportedReading_Read__Bint~q~n-Stable%()=~qpico_types_TImportedReading_Stable~q~n-Delete()=~qpico_types_TImportedReading_Delete~q~n}=~qpico_types_TImportedReading~q~nCreateImportedReading:TImportedReading()=~qpico_types_CreateImportedReading~q")
 noRuntimeResolver.AddInterface("pico.typefunctions", "sdk/pico.typefunctions.i", "superstrict~nTFactoryBase^Object{~n+Find:TFactoryBase(name$)=~qpico_typefunctions_TFactoryBase_Find__Bstring~q~n-Name$()A=~qpico_typefunctions_TFactoryBase_Name~q~n}A=~qpico_typefunctions_TFactoryBase~q")
-noRuntimeResolver.AddInterface("pico.lazyinheritance", "sdk/pico.lazyinheritance.i", "superstrict~nTWidget^Object{~n-Parent:TContainer()=~qpico_lazyinheritance_TWidget_Parent~q~n-X%()=~qpico_lazyinheritance_TWidget_X~q~n-Y%()=~qpico_lazyinheritance_TWidget_Y~q~n}=~qpico_lazyinheritance_TWidget~q~nTContainer^TWidget{~n-SetGap(value%)=~qpico_lazyinheritance_TContainer_SetGap__Bint~q~n-Row:TRow()=~qpico_lazyinheritance_TContainer_Row~q~n-SetPadding(value%)=~qpico_lazyinheritance_TContainer_SetPadding__Bint~q~n}=~qpico_lazyinheritance_TContainer~q~nTRow^TContainer{~n}=~qpico_lazyinheritance_TRow~q~nCreateWidget:TWidget()=~qpico_lazyinheritance_CreateWidget~q")
+noRuntimeResolver.AddInterface("pico.lazyinheritance", "sdk/pico.lazyinheritance.i", "superstrict~nTWidget^Object{~n-Parent:TContainer()=~qpico_lazyinheritance_TWidget_Parent~q~n-X%()=~qpico_lazyinheritance_TWidget_X~q~n-Y%()=~qpico_lazyinheritance_TWidget_Y~q~n}=~qpico_lazyinheritance_TWidget~q~nTContainer^TWidget{~n-SetGap(value%)=~qpico_lazyinheritance_TContainer_SetGap__Bint~q~n-Row:TRow()=~qpico_lazyinheritance_TContainer_Row~q~n-SetPadding(value%)=~qpico_lazyinheritance_TContainer_SetPadding__Bint~q~n}=~qpico_lazyinheritance_TContainer~q~nTRow^TContainer{~n}=~qpico_lazyinheritance_TRow~q~nCreateWidget:TWidget()=~qpico_lazyinheritance_CreateWidget~q~nCreateRow:TRow()=~qpico_lazyinheritance_CreateRow~q")
 Local noRuntimeScalar:TCompilerResult = TBlitzMaxCompiler.Compile("pico-scalar.bmx", "SuperStrict~nLocal value:Int = 20~nvalue :* 2", noRuntimeResolver, noRuntimeOptions)
 Local noRuntimeScalarDiagnostics:TCompilerDiagnostic[]
 Local noRuntimeScalarC:String = TBlitzMaxCompiler.EmitC(noRuntimeScalar, noRuntimeScalarDiagnostics)
@@ -367,6 +367,16 @@ For Local importedClass:TCompilerIrImportedClass = EachIn lazyImportedInheritanc
 Next
 Check(lazyImportedInheritance.Succeeded() And lazyImportedInheritanceDiagnostics.length = 0, "Pico completes imported inherited dispatch slots when method signatures discover derived Types before their bases are complete: " + CompilerDiagnosticSummary(lazyImportedInheritance) + "; emission: " + EmissionDiagnosticSummary(lazyImportedInheritanceDiagnostics))
 Check(lazyImportedRow And lazyImportedRow.functionSlots.length = 6 And lazyImportedRow.functionSlots[5].name = "SetPadding" And Contains(lazyImportedInheritanceC, "bmx_embedded_type_methods((void *)") And Contains(lazyImportedInheritanceC, ", 6)[5]"), "Pico repairs lazy imported inheritance base-first and preserves the dependency's six-slot method-table ABI")
+Local returnOnlyInheritance:TCompilerResult = TBlitzMaxCompiler.Compile("pico-return-only-inheritance.bmx", "SuperStrict~nImport pico.lazyinheritance~nLocal row:TRow=CreateRow()~nrow.SetPadding(6)", noRuntimeResolver, noRuntimeOptions)
+Local returnOnlyInheritanceDiagnostics:TCompilerDiagnostic[]
+Local returnOnlyInheritanceC:String = TBlitzMaxCompiler.EmitC(returnOnlyInheritance, returnOnlyInheritanceDiagnostics)
+Local returnOnlyRow:TCompilerIrImportedClass
+For Local importedClass:TCompilerIrImportedClass = EachIn returnOnlyInheritance.ir.importedClasses
+	If importedClass.name = "TRow" Then returnOnlyRow = importedClass; Exit
+Next
+Check(returnOnlyInheritance.Succeeded() And returnOnlyInheritanceDiagnostics.length = 0 And returnOnlyRow And ..
+	returnOnlyRow.functionSlots.length = 6 And Contains(returnOnlyInheritanceC, ", 6)[5]"), ..
+	"Pico finalizes inherited dispatch layouts for derived Types discovered only through return signatures")
 Local multicoreLoopSource:String = "SuperStrict~nFunction Spin:Int(handle:Object, limit:Int)~nLocal count:Int~nWhile count < limit~ncount:+1~nWend~nRepeat~ncount:+1~nUntil count = limit + 2~nFor Local index:Int = 0 Until limit~ncount:+index~nNext~nIf handle = Null Then Return count~nReturn count + 1~nEnd Function~nLocal result:Int = Spin(Null, 3)"
 Local singleCoreLoops:TCompilerResult = TBlitzMaxCompiler.Compile("pico-singlecore-loops.bmx", multicoreLoopSource, noRuntimeResolver, noRuntimeOptions)
 Local singleCoreLoopDiagnostics:TCompilerDiagnostic[]
