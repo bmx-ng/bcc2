@@ -25,5 +25,15 @@ then
 	echo "quoted-source generic unit used a synthetic module header" >&2
 	exit 1
 fi
+if find "$fixture_dir/.bmx/.generics" -name '*.c' -type f -exec grep -l '#include <\.bmx/compiler_application_quoted_generic_types\.bmx\.' {} \; | xargs grep -q '^struct application_compiler_application_quoted_generic_main_TQuotedEntity_obj {'
+then
+	echo "quoted-source generic Method unit redefined its header-owned ordinary Type" >&2
+	exit 1
+fi
+if find "$fixture_dir/.bmx/.generics" -name '*.c' -type f -exec grep -l '#include <\.bmx/compiler_application_quoted_generic_types\.bmx\.' {} \; | xargs grep -q '^struct application_compiler_application_quoted_generic_main_SQuotedGenericOwner {'
+then
+	echo "quoted-source generic Method unit redefined its header-owned ordinary Struct" >&2
+	exit 1
+fi
 
 echo "bcc2 application quoted-source generic regression passed"
