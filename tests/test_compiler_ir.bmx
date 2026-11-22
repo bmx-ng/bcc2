@@ -367,6 +367,25 @@ For Local importedClass:TCompilerIrImportedClass = EachIn lazyImportedInheritanc
 Next
 Check(lazyImportedInheritance.Succeeded() And lazyImportedInheritanceDiagnostics.length = 0, "Pico completes imported inherited dispatch slots when method signatures discover derived Types before their bases are complete: " + CompilerDiagnosticSummary(lazyImportedInheritance) + "; emission: " + EmissionDiagnosticSummary(lazyImportedInheritanceDiagnostics))
 Check(lazyImportedRow And lazyImportedRow.functionSlots.length = 6 And lazyImportedRow.functionSlots[5].name = "SetPadding" And Contains(lazyImportedInheritanceC, "bmx_embedded_type_methods((void *)") And Contains(lazyImportedInheritanceC, ", 6)[5]"), "Pico repairs lazy imported inheritance base-first and preserves the dependency's six-slot method-table ABI")
+For Local leftIndex:Int = 0 Until lazyImportedRow.functionSlots.length
+	For Local rightIndex:Int = leftIndex + 1 Until lazyImportedRow.functionSlots.length
+		Check(lazyImportedRow.functionSlots[leftIndex].slotId <> lazyImportedRow.functionSlots[rightIndex].slotId, "lazy imported inheritance keeps distinct slot identities after inserting ancestor slots")
+	Next
+Next
+Local lazyOverrideSource:String = """
+SuperStrict
+Import pico.lazyinheritance
+Type TCustomRow Extends TRow
+ Method SetPadding(value:Int) Override
+ End Method
+End Type
+Local row:TRow = New TCustomRow
+row.SetPadding(6)
+"""
+Local lazyOverride:TCompilerResult = TBlitzMaxCompiler.Compile("pico-lazy-override.bmx", lazyOverrideSource, noRuntimeResolver, noRuntimeOptions)
+Check(lazyOverride.Succeeded(), "overriding a lazily imported method compiles: " + CompilerDiagnosticSummary(lazyOverride))
+Local lazyOverrideSlots:TCompilerIrClassFunctionSlot[] = lazyOverride.ir.classes[0].functionSlots
+Check(lazyOverrideSlots.length = 6 And lazyOverrideSlots[0].name = "Parent" And lazyOverrideSlots[5].name = "SetPadding" And lazyOverrideSlots[5].receiverClassId = lazyOverride.ir.classes[0].classId, "lazy imported override replaces its own slot and preserves ancestor entries")
 Local returnOnlyInheritance:TCompilerResult = TBlitzMaxCompiler.Compile("pico-return-only-inheritance.bmx", "SuperStrict~nImport pico.lazyinheritance~nLocal row:TRow=CreateRow()~nrow.SetPadding(6)", noRuntimeResolver, noRuntimeOptions)
 Local returnOnlyInheritanceDiagnostics:TCompilerDiagnostic[]
 Local returnOnlyInheritanceC:String = TBlitzMaxCompiler.EmitC(returnOnlyInheritance, returnOnlyInheritanceDiagnostics)
