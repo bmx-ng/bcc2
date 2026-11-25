@@ -101,9 +101,9 @@ Check(beforeAnalysis.model.diagnostics.length = afterAnalysis.model.diagnostics.
 For Local index:Int = 0 Until beforeAnalysis.model.diagnostics.length
 	Check(beforeAnalysis.model.diagnostics[index].code = afterAnalysis.model.diagnostics[index].code, "inline expansion preserves semantic diagnostic codes")
 Next
-Check(Formatted("SuperStrict~nIf True Then Print ~qyes~q Else Print ~qno~q~n", "preserve", "preserve", "expand") = "SuperStrict~nIf True Then Print ~qyes~q Else Print ~qno~q~n", "inline Else stays unchanged")
+Check(Formatted("SuperStrict~nIf True Then Print ~qyes~q Else Print ~qno~q~n", "preserve", "preserve", "expand") = "SuperStrict~nIf True Then~n~tPrint ~qyes~q~nElse~n~tPrint ~qno~q~nEnd If~n", "inline Else expands into a separate branch")
 Check(Formatted("SuperStrict~nIf True Then Print ~qyes~q ' comment~n", "preserve", "preserve", "expand") = "SuperStrict~nIf True Then Print ~qyes~q ' comment~n", "trailing comments block expansion")
-Check(Formatted("SuperStrict~nIf True Then Print ~qyes~q; Print ~qmore~q~n", "preserve", "preserve", "expand") = "SuperStrict~nIf True Then Print ~qyes~q; Print ~qmore~q~n", "multiple inline statements stay unchanged")
+Check(Formatted("SuperStrict~nIf True Then Print ~qyes~q; Print ~qmore~q~n", "preserve", "preserve", "expand") = "SuperStrict~nIf True Then~n~tPrint ~qyes~q~n~tPrint ~qmore~q~nEnd If~n", "multiple inline statements expand in order")
 Check(Formatted("SuperStrict~r~nIf True Then Print ~qyes~q~r~n", "preserve", "preserve", "expand") = "SuperStrict~r~nIf True Then~r~n~tPrint ~qyes~q~r~nEnd If~r~n", "inline expansion retains CRLF")
 Local malformed:String = "SuperStrict~nFunction Broken:Int(~nEnd Function~n"
 Check(Formatted(malformed, "remove", "combined") = malformed, "malformed source is left untouched")
